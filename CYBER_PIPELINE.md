@@ -87,13 +87,15 @@ GeoTraceAI/
 │       ├── exif_service.py          ← Phase 1
 │       ├── metadata_analyzer.py     ← Phase 2
 │       ├── image_forensics.py       ← Phase 3
+│       ├── reliability_engine.py    ← Phase 4
 │       └── main.py                  ← orchestrator
 ├── datasets/
 │   └── test_images/
 │       └── image.png                ← test image
 └── tests/
     ├── test_metadata_analyzer.py    ← Phase 2 tests
-    └── test_image_forensics.py      ← Phase 3 tests
+    ├── test_image_forensics.py      ← Phase 3 tests
+    └── test_reliability_engine.py   ← Phase 4 tests
 ```
 
 ### Tools & Dependencies
@@ -541,10 +543,157 @@ PASS: output structure complete
 
 ---
 
-## Upcoming Phases
+## Phase 4 — Forensic Reliability Engine
 
-### Phase 4 — Forensic Reliability Engine
-Weighs all indicators from Phase 2 and Phase 3 and produces a single `reliability_score` (0.0–1.0) for the image's metadata trustworthiness.
+**Status:** COMPLETED
+**Commit:** `feat: Phase 4 — forensic reliability engine`
+
+### What was built
+
+`reliability_engine.py` — takes the merged indicator list from Phase 2 + Phase 3 and the continuous image forensics measurements, and produces a single reliability score with full transparency into how it was calculated.
+
+### Pipeline
+
+```
+Phase 2 Indicators + Phase 3 Indicators
+       │
+       ▼
+reliability_engine.py
+       │
+       ├── Score each indicator (weighted penalties)
+       ├── Apply continuous metric adjustments (graded ELA/noise)
+       ├── Compute total penalty
+       └── Classify reliability level
+       │
+       ▼
+{
+  reliability_score: 0.72,
+  reliability_level: "medium",
+  tampering_suspected: false,
+  scored_indicators: [...],
+  continuous_adjustments: [...],
+  total_penalty: 0.28
+}
+```
+
+### 4.1 Scoring Approach
+
+Start at 1.0 (fully trustworthy). Each indicator subtracts a weighted penalty. Final score is clamped to [0.0, 1.0].
+
+**Indicator Penalty Weights:**
+
+| Indicator | Penalty | Rationale |
+|-----------|---------|-----------|
+| `metadata_extraction_failed` | 0.25 | No metadata to analyze at all |
+| `gps_null_island` | 0.20 | Coordinates (0,0) are almost always errors |
+| `ela_localized_hotspot` | 0.20 | Localized region with very different compression |
+| `noise_inconsistency_high` | 0.20 | Strong noise mismatch between image regions |
+| `modify_date_before_original` | 0.15 | Timestamp went backward — unusual |
+| `ela_high_variance` | 0.15 | Uneven compression across the image |
+| `flat_channel:<name>` | 0.12 | A color channel is nearly uniform — synthetic fill |
+| `original_create_date_mismatch` | 0.10 | DateTimeOriginal and CreateDate disagree |
+| `noise_inconsistency_moderate` | 0.10 | Moderate noise mismatch |
+| `unusual_gps_altitude` | 0.10 | GPS altitude below -100m |
+| `very_low_resolution` | 0.10 | Image below 0.1 megapixels |
+| `missing_datetime_original` | 0.08 | No DateTimeOriginal field |
+| `missing_camera_info` | 0.08 | No Make or Model field |
+| `unusual_color_mode:<mode>` | 0.05 | Non-standard color mode |
+| `software_detected:<name>` | 0.03 | Software field present — noted, barely penalized |
+| `image_open_failed:<reason>` | 0.30 | Image could not be opened for analysis |
+| Unknown indicator | 0.02 | Default — ensures no indicator is invisible |
+
+### 4.2 Continuous Metric Adjustments
+
+Binary indicators only fire at thresholds (e.g., ELA std > 60). Continuous adjustments handle the gray zone below thresholds:
+
+| Source | Trigger | Penalty |
+|--------|---------|---------|
+| `ela_std_elevated` | ELA std between 40–60 | 0.07 |
+| `ela_std_very_high` | ELA std > 60 (extra on top of indicator) | 0.05 |
+| `noise_cv_elevated` | Noise CV between 0.35–0.5 | 0.05 |
+| `noise_cv_very_high` | Noise CV > 0.7 (extra on top of indicator) | 0.05 |
+| `ela_hotspot_extreme_ratio` | ELA max/mean ratio > 15 | 0.08 |
+
+### 4.3 Reliability Levels
+
+| Score Range | Level | Meaning |
+|-------------|-------|---------|
+| 0.80 – 1.00 | `high` | Metadata appears trustworthy |
+| 0.55 – 0.79 | `medium` | Some concerns, use with caution |
+| 0.30 – 0.54 | `low` | Significant issues detected |
+| 0.00 – 0.29 | `very_low` | Strong evidence of problems |
+
+### 4.4 Tampering Suspected
+
+`tampering_suspected` is set to `true` when the score drops below 0.55 (configurable threshold). This is still an indicator, not proof. The downstream fusion engine uses it alongside AI pipeline confidence.
+
+### 4.5 Updated main.py
+
+The orchestrator now runs all four phases:
+
+```
+validate → sha256 → exif → metadata_analysis → image_forensics → reliability_engine → output
+```
+
+The `forensics` section in the output now includes:
+
+```json
+{
+  "forensics": {
+    "indicators": ["software_detected:Adobe Photoshop 25.0"],
+    "indicator_count": 1,
+    "reliability_score": 0.97,
+    "reliability_level": "high",
+    "tampering_suspected": false,
+    "scored_indicators": [
+      { "indicator": "software_detected:Adobe Photoshop 25.0", "penalty": 0.03 }
+    ],
+    "continuous_adjustments": [],
+    "total_penalty": 0.03
+  }
+}
+```
+
+### 4.6 Tests
+
+**File:** `tests/test_reliability_engine.py`
+**Test count:** 12 test functions
+
+| Test | What it verifies |
+|------|-----------------|
+| `test_clean_image` | No indicators → score 1.0, high, no tampering |
+| `test_software_only` | Software detected → score ≥0.95, still high |
+| `test_missing_metadata` | Two missing fields → correct penalty sum |
+| `test_timestamp_plus_software` | Timestamp issues → medium reliability |
+| `test_heavy_tampering` | Multiple severe indicators → low/very_low, tampering suspected |
+| `test_extraction_failed` | Metadata extraction failed → 0.25 penalty |
+| `test_continuous_ela_elevated` | ELA std 50 → continuous adjustment applied |
+| `test_continuous_noise_elevated` | Noise CV 0.42 → continuous adjustment applied |
+| `test_no_continuous_on_clean` | Clean metrics → no adjustments, score 1.0 |
+| `test_score_floor` | All indicators stacked → score 0.0 (not negative) |
+| `test_unknown_indicator` | Undefined indicator → default 0.02 penalty |
+| `test_custom_threshold` | Strict threshold changes tampering_suspected |
+
+```
+PASS: clean image — score 1.0, high reliability
+PASS: software detected — minimal penalty, still high
+PASS: missing metadata — moderate penalty
+PASS: timestamp issues + software — medium reliability
+PASS: heavy tampering — low score, tampering suspected
+PASS: extraction failed — 0.25 penalty applied
+PASS: continuous ELA adjustment applied
+PASS: continuous noise adjustment applied
+PASS: no continuous adjustments on clean metrics
+PASS: score floor at 0.0
+PASS: unknown indicator — default 0.02 penalty
+PASS: custom tampering threshold works
+
+=== ALL PHASE 4 TESTS PASSED ===
+```
+
+---
+
+## Upcoming Phases
 
 ### Phase 5 — AI/Cyber Evidence Integration
 Bridges the cyber pipeline output with the AI pipeline output. Defines the shared data contract.
@@ -564,3 +713,4 @@ Generates the complete `cyber_result.json` with all findings, scores, and a huma
 | 2026-09-05 | 1 | File validation, SHA-256 hashing, ExifTool extraction |
 | 2026-09-05 | 2 | Metadata forensic analyzer with GPS normalization, timestamp checks, forensic indicators |
 | 2026-09-05 | 3 | Image forensic indicators: ELA, noise consistency, channel stats, JPEG quality, structure analysis |
+| 2026-09-05 | 4 | Forensic reliability engine: weighted scoring, continuous adjustments, reliability levels |

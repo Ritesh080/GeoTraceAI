@@ -6,6 +6,7 @@ from file_validator import validate_image
 from exif_service import extract_exif
 from metadata_analyzer import analyze_metadata
 from image_forensics import analyze_image_forensics
+from reliability_engine import compute_reliability
 
 
 def analyze_image(file_path: str) -> dict:
@@ -32,6 +33,12 @@ def analyze_image(file_path: str) -> dict:
         + img_analysis["indicators"]
     )
 
+    # Phase 4: compute reliability score
+    reliability = compute_reliability(
+        indicators=all_indicators,
+        image_forensics=img_analysis["image_forensics"],
+    )
+
     return {
         "status": "success",
 
@@ -48,6 +55,12 @@ def analyze_image(file_path: str) -> dict:
         "forensics": {
             "indicators": all_indicators,
             "indicator_count": len(all_indicators),
+            "reliability_score": reliability["reliability_score"],
+            "reliability_level": reliability["reliability_level"],
+            "tampering_suspected": reliability["tampering_suspected"],
+            "scored_indicators": reliability["scored_indicators"],
+            "continuous_adjustments": reliability["continuous_adjustments"],
+            "total_penalty": reliability["total_penalty"],
         },
     }
 
