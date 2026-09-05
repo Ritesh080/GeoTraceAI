@@ -5,6 +5,7 @@ from hash_service import calculate_sha256
 from file_validator import validate_image
 from exif_service import extract_exif
 from metadata_analyzer import analyze_metadata
+from image_forensics import analyze_image_forensics
 
 
 def analyze_image(file_path: str) -> dict:
@@ -21,7 +22,15 @@ def analyze_image(file_path: str) -> dict:
 
     raw_exif = extract_exif(file_path)
 
-    analysis = analyze_metadata(raw_exif)
+    meta_analysis = analyze_metadata(raw_exif)
+
+    img_analysis = analyze_image_forensics(file_path)
+
+    # Merge indicators from Phase 2 (metadata) and Phase 3 (image)
+    all_indicators = (
+        meta_analysis["forensics"]["indicators"]
+        + img_analysis["indicators"]
+    )
 
     return {
         "status": "success",
@@ -32,9 +41,14 @@ def analyze_image(file_path: str) -> dict:
 
         "raw_exif": raw_exif,
 
-        "metadata": analysis["metadata"],
+        "metadata": meta_analysis["metadata"],
 
-        "forensics": analysis["forensics"],
+        "image_forensics": img_analysis["image_forensics"],
+
+        "forensics": {
+            "indicators": all_indicators,
+            "indicator_count": len(all_indicators),
+        },
     }
 
 

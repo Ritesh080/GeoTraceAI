@@ -79,19 +79,21 @@ Image
 ```
 GeoTraceAI/
 ├── .gitignore
-├── CYBER_PIPELINE.md              ← this file
+├── CYBER_PIPELINE.md                ← this file
 ├── backend/
 │   └── cyber/
-│       ├── file_validator.py      ← Phase 1
-│       ├── hash_service.py        ← Phase 1
-│       ├── exif_service.py        ← Phase 1
-│       ├── metadata_analyzer.py   ← Phase 2
-│       └── main.py                ← orchestrator
+│       ├── file_validator.py        ← Phase 1
+│       ├── hash_service.py          ← Phase 1
+│       ├── exif_service.py          ← Phase 1
+│       ├── metadata_analyzer.py     ← Phase 2
+│       ├── image_forensics.py       ← Phase 3
+│       └── main.py                  ← orchestrator
 ├── datasets/
 │   └── test_images/
-│       └── image.png              ← test image
+│       └── image.png                ← test image
 └── tests/
-    └── test_metadata_analyzer.py  ← Phase 2 tests
+    ├── test_metadata_analyzer.py    ← Phase 2 tests
+    └── test_image_forensics.py      ← Phase 3 tests
 ```
 
 ### Tools & Dependencies
@@ -353,13 +355,196 @@ PASS: error input handled
 
 ---
 
+## Phase 3 — Image Forensic Indicators (OpenCV / Pillow)
+
+**Status:** COMPLETED
+**Commit:** `feat: Phase 3 — image forensic indicators`
+
+### What was built
+
+`image_forensics.py` — pixel-level forensic analysis that produces numeric measurements and string indicators. These merge into the same `forensics.indicators` list from Phase 2.
+
+### Pipeline
+
+```
+Image File (validated by Phase 1)
+       │
+       ▼
+image_forensics.py
+       │
+       ├── Structure Analysis (dimensions, resolution, color mode)
+       ├── ELA (Error Level Analysis)
+       ├── Noise Consistency Analysis
+       ├── Channel Statistics
+       └── JPEG Quality Estimation
+       │
+       ▼
+{ image_forensics: { ... }, indicators: [ ... ] }
+```
+
+### 3.1 Image Structure Analysis
+
+**Purpose:** Extract basic properties that may be forensically relevant.
+
+**Fields extracted:**
+- `width`, `height` — pixel dimensions
+- `megapixels` — total resolution
+- `aspect_ratio` — width/height ratio
+- `mode` — color mode (RGB, RGBA, L, P, etc.)
+
+**Indicators:**
+
+| Indicator | Trigger |
+|-----------|---------|
+| `very_low_resolution` | Image is below 0.1 megapixels — likely a thumbnail, crop, or synthetic image |
+| `unusual_color_mode:<mode>` | Color mode is not RGB or RGBA — palette images, grayscale, or unusual encoding |
+
+### 3.2 Error Level Analysis (ELA)
+
+**Purpose:** Detect regions that have been modified after the last JPEG save.
+
+**How it works:**
+1. Re-save the image as JPEG at a known quality (90%).
+2. Compute the absolute pixel difference between the original and re-saved version.
+3. Scale the difference map for interpretability.
+4. Calculate mean, max, and standard deviation of the error levels.
+
+**Forensic logic:** When a JPEG is saved, all regions compress uniformly. If a region was pasted or edited after the last save, it will have a different compression history and show higher error levels than the surrounding area.
+
+**Indicators:**
+
+| Indicator | Trigger |
+|-----------|---------|
+| `ela_high_variance` | ELA standard deviation > 60 — some regions have very different compression levels |
+| `ela_localized_hotspot` | ELA max > 200 but mean < 30 — a small area has extreme error while the rest is uniform, suggesting localized editing |
+
+### 3.3 Noise Consistency Analysis
+
+**Purpose:** Detect regions with different noise profiles, which may indicate splicing.
+
+**How it works:**
+1. Convert image to grayscale.
+2. Split into non-overlapping 64x64 blocks.
+3. For each block, compute the standard deviation of the Laplacian (measures edge-free noise).
+4. Calculate the coefficient of variation (CV) across all blocks.
+
+**Forensic logic:** A genuine photograph has a uniform noise profile across the entire image (same sensor, same ISO). If a region was pasted from a different source, its noise level will differ from the rest.
+
+**Indicators:**
+
+| Indicator | Trigger |
+|-----------|---------|
+| `noise_inconsistency_high` | Noise CV > 0.7 — strong evidence of mixed noise sources |
+| `noise_inconsistency_moderate` | Noise CV > 0.5 — moderate inconsistency worth noting |
+
+### 3.4 Channel Statistics
+
+**Purpose:** Detect anomalous color channel distributions.
+
+**Fields per channel (red, green, blue):**
+- `mean` — average pixel value (0–255)
+- `std` — standard deviation
+
+**Indicators:**
+
+| Indicator | Trigger |
+|-----------|---------|
+| `flat_channel:<name>` | Standard deviation < 1.0 in a channel — the channel is nearly uniform, suggesting synthetic fill or solid overlay |
+
+### 3.5 JPEG Quality Estimation
+
+**Purpose:** Estimate the JPEG quantization quality level.
+
+**How it works:** Reads the JPEG quantization table (luminance), averages the values, and maps to an estimated 1–100 quality scale.
+
+**Returns:** Integer quality estimate, or `null` for non-JPEG images.
+
+**Forensic role:** Useful in later phases to detect double compression (a JPEG saved at quality 95 that has quantization artifacts of quality 60 was likely re-saved).
+
+### 3.6 Updated main.py
+
+The orchestrator now merges indicators from both Phase 2 and Phase 3:
+
+```
+validate → sha256 → exif → metadata_analysis → image_forensics → merged output
+```
+
+Output now includes a new `image_forensics` section:
+
+```json
+{
+  "status": "success",
+  "sha256": "...",
+  "file": { ... },
+  "raw_exif": { ... },
+  "metadata": { ... },
+  "image_forensics": {
+    "structure": { "width": 640, "height": 480, "megapixels": 0.31, ... },
+    "ela": { "ela_mean": 14.18, "ela_max": 104.83, "ela_std": 11.11, ... },
+    "noise": { "noise_mean": 134.16, "noise_cv": 0.0137, ... },
+    "channels": { "red": { ... }, "green": { ... }, "blue": { ... } },
+    "jpeg_quality": 75
+  },
+  "forensics": {
+    "indicators": [ ... ],
+    "indicator_count": 1
+  }
+}
+```
+
+The `forensics.indicators` list now contains indicators from BOTH metadata analysis (Phase 2) and image analysis (Phase 3), merged in `main.py`.
+
+### 3.7 Dependencies Added
+
+```
+opencv-python-headless   # Image processing (ELA, noise analysis)
+numpy                     # Array operations
+Pillow                    # Image I/O (already used in Phase 1)
+```
+
+Install on your machine:
+```bash
+pip install opencv-python numpy Pillow
+```
+
+### 3.8 Tests
+
+**File:** `tests/test_image_forensics.py`
+**Test count:** 7 test functions
+
+| Test | What it verifies |
+|------|-----------------|
+| `test_normal_image` | Clean JPEG produces expected structure, ELA, noise, and channel stats |
+| `test_tiny_image` | 30x30 PNG triggers `very_low_resolution` |
+| `test_flat_channel` | Image with uniform red channel triggers `flat_channel:red` |
+| `test_jpeg_quality` | Quality estimation returns a value between 1 and 100 |
+| `test_invalid_file` | Non-image file returns `image_open_failed` indicator |
+| `test_spliced_image` | Image with pasted block triggers `noise_inconsistency_high` |
+| `test_full_output_structure` | All expected keys present in output dict |
+
+```
+  indicators: []
+PASS: normal image
+PASS: tiny image flagged
+PASS: flat channel detected
+  estimated quality: 75
+PASS: JPEG quality estimated
+PASS: invalid file handled
+  ELA std: 4.21
+  noise CV: 1.4464
+  indicators: ['noise_inconsistency_high']
+PASS: spliced image analyzed
+PASS: output structure complete
+
+=== ALL PHASE 3 TESTS PASSED ===
+```
+
+---
+
 ## Upcoming Phases
 
-### Phase 3 — Image Forensic Indicators (OpenCV / Pillow)
-Pixel-level analysis: ELA (Error Level Analysis), noise inconsistency, clone detection hints. These feed into the indicator list alongside metadata indicators.
-
 ### Phase 4 — Forensic Reliability Engine
-Weighs all indicators and produces a single `reliability_score` (0.0–1.0) for the image's metadata trustworthiness.
+Weighs all indicators from Phase 2 and Phase 3 and produces a single `reliability_score` (0.0–1.0) for the image's metadata trustworthiness.
 
 ### Phase 5 — AI/Cyber Evidence Integration
 Bridges the cyber pipeline output with the AI pipeline output. Defines the shared data contract.
@@ -378,3 +563,4 @@ Generates the complete `cyber_result.json` with all findings, scores, and a huma
 |------|-------|-------------|
 | 2026-09-05 | 1 | File validation, SHA-256 hashing, ExifTool extraction |
 | 2026-09-05 | 2 | Metadata forensic analyzer with GPS normalization, timestamp checks, forensic indicators |
+| 2026-09-05 | 3 | Image forensic indicators: ELA, noise consistency, channel stats, JPEG quality, structure analysis |
