@@ -4,6 +4,7 @@ import sys
 from hash_service import calculate_sha256
 from file_validator import validate_image
 from exif_service import extract_exif
+from metadata_analyzer import analyze_metadata
 
 
 def analyze_image(file_path: str) -> dict:
@@ -18,7 +19,9 @@ def analyze_image(file_path: str) -> dict:
 
     sha256 = calculate_sha256(file_path)
 
-    metadata = extract_exif(file_path)
+    raw_exif = extract_exif(file_path)
+
+    analysis = analyze_metadata(raw_exif)
 
     return {
         "status": "success",
@@ -27,7 +30,11 @@ def analyze_image(file_path: str) -> dict:
 
         "file": file_info,
 
-        "metadata": metadata
+        "raw_exif": raw_exif,
+
+        "metadata": analysis["metadata"],
+
+        "forensics": analysis["forensics"],
     }
 
 
