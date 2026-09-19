@@ -1,0 +1,10 @@
+.git
+.next
+out
+node_modules
+.venv
+__pycache__
+*.pyc
+*.tsbuildinfo
+.env*
+work

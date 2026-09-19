@@ -22,3 +22,12 @@ env/
 # Output
 output/
 *.log
+
+# Website
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
+# OCR model cache
+*.traineddata
