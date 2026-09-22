@@ -89,6 +89,7 @@ GeoTraceAI/
 │       ├── image_forensics.py       ← Phase 3
 │       ├── reliability_engine.py    ← Phase 4
 │       ├── evidence_fusion.py       ← Phase 5
+│       ├── conflict_detection.py    ← Phase 6
 │       └── main.py                  ← orchestrator
 ├── datasets/
 │   └── test_images/
@@ -719,10 +720,24 @@ Even the strongest outcome remains “for review”; Phase 5 does not issue an a
 
 The fusion tests verify score separation, abstention on low forensic reliability, abstention on conflicts, rejection of uncalibrated confidence, and dependency-aware source counting.
 
-## Upcoming Phases
+## Phase 6 — Conflict Detection
 
-### Phase 6 — Conflict Detection
-Compares EXIF GPS vs. AI-predicted location vs. OCR clues. Flags contradictions.
+**Status:** COMPLETED
+
+`conflict_detection.py` performs a dedicated comparison after all configured location evidence has been collected and before Phase 5 makes its final integration decision. It produces typed conflicts with severity, involved candidates, source groups, geographic distance, and an explicit `forces_abstention` flag.
+
+Implemented conflict types:
+
+- `coordinate_disagreement` when two coordinate-bearing candidates are at least 25 km apart.
+- `asset_integrity_vs_embedded_location` when embedded GPS exists but the submitted file has serious forensic reliability concerns.
+
+Distance severity is `medium` from 25 km, `high` from 100 km, and `critical` from 1,000 km. Every explicit location conflict forces abstention and clears aggregate location confidence until an analyst resolves it.
+
+Conservative rules prevent false contradictions: missing evidence is not a conflict, low street-image similarity is not a conflict, and unmatched OCR text is not a conflict without a language-aware extractor producing an explicit competing place. The engine explains disagreement but never declares which source is correct.
+
+Phase 6 tests cover distant and nearby candidates, unreliable embedded GPS, and the low-street-similarity safeguard.
+
+## Upcoming Phases
 
 ### Phase 7 — Final Forensic Report
 Generates the complete `cyber_result.json` with all findings, scores, and a human-readable summary.
@@ -738,3 +753,4 @@ Generates the complete `cyber_result.json` with all findings, scores, and a huma
 | 2026-09-05 | 3 | Image forensic indicators: ELA, noise consistency, channel stats, JPEG quality, structure analysis |
 | 2026-09-05 | 4 | Forensic reliability engine: weighted scoring, continuous adjustments, reliability levels |
 | 2026-09-22 | 5 | AI/Cyber evidence integration with score separation, dependency-aware source counting, and abstention gates |
+| 2026-09-22 | 6 | Typed cross-source conflict detection with severity, distance, integrity checks, and mandatory abstention |
