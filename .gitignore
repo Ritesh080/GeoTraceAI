@@ -26,8 +26,18 @@ output/
 # Website
 node_modules/
 .next/
+.next-build/
 out/
 *.tsbuildinfo
+
+# Generated GeoTrace reference artifacts
+backend/models/geotrace_visual_v0.npz
+backend/models/geotrace_street_v0.npz
+backend/models/geotrace_provenance_v0.npz
+backend/models/geotrace_calibration_v0.npz
+backend/models/geotrace_benchmark_report_v0.json
+backend/models/geotrace_reference_bundle_report.json
+backend/models/.geotrace-reference-build.lock
 
 # OCR model cache
 *.traineddata

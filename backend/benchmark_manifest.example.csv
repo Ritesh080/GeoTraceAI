@@ -1,0 +1,2 @@
+image_path,latitude,longitude,scene,condition,source_id
+benchmark/example.jpg,28.6139,77.2090,urban,daylight,your-licensed-corpus

@@ -1,0 +1,2 @@
+image_path,reference_id,title,source_name,source_url,published_at,license,attribution,origin_group,source_id
+references/example.jpg,example-001,Example publication,Example Archive,https://example.org/item/001,2026-01-01T12:00:00Z,CC-BY-4.0,Example photographer,origin-example-001,your-licensed-corpus

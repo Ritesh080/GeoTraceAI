@@ -1,0 +1,5 @@
+image_path,label,latitude,longitude,precision_tier,source_id
+references/new_delhi_001.jpg,"New Delhi, India",28.6139,77.2090,city_level,your-licensed-corpus
+references/new_delhi_002.jpg,"New Delhi, India",28.6139,77.2090,city_level,your-licensed-corpus
+references/mumbai_001.jpg,"Mumbai, India",19.0760,72.8777,city_level
+references/mumbai_002.jpg,"Mumbai, India",19.0760,72.8777,city_level

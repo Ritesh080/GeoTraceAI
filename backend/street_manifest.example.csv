@@ -1,0 +1,2 @@
+image_path,reference_id,label,latitude,longitude,heading,source_url,license,attribution,captured_at,source_id
+references/example.jpg,kv-example-123,"Example road, Example City",28.6139,77.2090,90,https://kartaview.org/details/example,CC-BY-SA-4.0,© Grab and KartaView Contributors,2026-01-01T12:00:00Z,your-licensed-corpus

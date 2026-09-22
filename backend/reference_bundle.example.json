@@ -1,0 +1,19 @@
+{
+  "bundle_id": "geotrace-reference-2026-09",
+  "source_ledger": [
+    {
+      "source_id": "your-licensed-corpus",
+      "name": "Your licensed reference corpus",
+      "license": "Replace with the exact licence",
+      "attribution": "Replace with the required attribution",
+      "terms_url": "https://example.com/licence"
+    }
+  ],
+  "visual_manifest": "training_manifest.csv",
+  "map_source": "cities5000.txt",
+  "country_info": "countryInfo.txt",
+  "street_manifest": "street_manifest.csv",
+  "provenance_manifest": "provenance_manifest.csv",
+  "benchmark_manifest": "benchmark_manifest.csv",
+  "distance_threshold_km": 25
+}
