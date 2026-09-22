@@ -51,6 +51,7 @@ from backend.local_source_provenance import (
     match_source_provenance,
 )
 from backend.index_coverage import coverage_report
+from evidence_fusion import fuse_evidence
 
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
@@ -219,6 +220,7 @@ async def analyze(
                 raise HTTPException(503, str(error)) from error
             except LocalProvenanceError as error:
                 raise HTTPException(502, str(error)) from error
+        result["evidence_fusion"] = fuse_evidence(result, result["osint"])
         return result
     finally:
         if temporary_path:
@@ -246,4 +248,5 @@ async def analyze_instagram(request: InstagramAnalyzeRequest) -> dict:
         metadata=result["metadata"],
         source=result["source"],
     )
+    result["evidence_fusion"] = fuse_evidence(result, result["osint"])
     return result

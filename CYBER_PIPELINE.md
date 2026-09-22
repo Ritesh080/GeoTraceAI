@@ -32,7 +32,7 @@ Image
   → SHA-256 Hashing (hashlib)
   → EXIF Extraction (ExifTool)
   → Metadata Forensic Analysis        ← Phase 2
-  → Image Forensic Indicators         ← Phase 3 (upcoming)
+  → Image Forensic Indicators         ← Phase 3
   → Forensic Reliability Engine        ← Phase 4
   → AI/Cyber Evidence Integration      ← Phase 5
   → Conflict Detection                 ← Phase 6
@@ -88,6 +88,7 @@ GeoTraceAI/
 │       ├── metadata_analyzer.py     ← Phase 2
 │       ├── image_forensics.py       ← Phase 3
 │       ├── reliability_engine.py    ← Phase 4
+│       ├── evidence_fusion.py       ← Phase 5
 │       └── main.py                  ← orchestrator
 ├── datasets/
 │   └── test_images/
@@ -693,10 +694,32 @@ PASS: custom tampering threshold works
 
 ---
 
-## Upcoming Phases
+## Phase 5 — AI/Cyber Evidence Integration
 
-### Phase 5 — AI/Cyber Evidence Integration
-Bridges the cyber pipeline output with the AI pipeline output. Defines the shared data contract.
+**Status:** COMPLETED
+
+`evidence_fusion.py` bridges the cyber result with ranked location evidence after the AI/OSINT stages finish. It deliberately preserves two different meanings:
+
+- **Forensic reliability** is a trust estimate for the submitted file and its forensic signals.
+- **Location confidence** belongs to a location candidate and is retained only when benchmark calibration exists.
+
+The fusion layer never converts one score into the other. It also groups supporting and contradictory records by source origin, excludes submitted-image and Instagram-derived clues from independent-source counts, and requires two independent location-source groups before a candidate can qualify for a conclusion.
+
+It returns explicit blockers and one of these decisions:
+
+- `abstain_no_location_candidate`
+- `abstain_asset_integrity_concern`
+- `abstain_conflicting_location_evidence`
+- `location_candidate_needs_more_evidence`
+- `location_candidate_supported_for_review`
+
+Even the strongest outcome remains “for review”; Phase 5 does not issue an automated factual location verdict.
+
+### Phase 5 tests
+
+The fusion tests verify score separation, abstention on low forensic reliability, abstention on conflicts, rejection of uncalibrated confidence, and dependency-aware source counting.
+
+## Upcoming Phases
 
 ### Phase 6 — Conflict Detection
 Compares EXIF GPS vs. AI-predicted location vs. OCR clues. Flags contradictions.
@@ -714,3 +737,4 @@ Generates the complete `cyber_result.json` with all findings, scores, and a huma
 | 2026-09-05 | 2 | Metadata forensic analyzer with GPS normalization, timestamp checks, forensic indicators |
 | 2026-09-05 | 3 | Image forensic indicators: ELA, noise consistency, channel stats, JPEG quality, structure analysis |
 | 2026-09-05 | 4 | Forensic reliability engine: weighted scoring, continuous adjustments, reliability levels |
+| 2026-09-22 | 5 | AI/Cyber evidence integration with score separation, dependency-aware source counting, and abstention gates |
