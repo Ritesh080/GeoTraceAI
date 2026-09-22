@@ -127,6 +127,8 @@ export INSTALOADER_SESSION_FILE="$HOME/.config/instaloader/session-YOUR_INSTAGRA
 npm run backend:dev
 ```
 
-The website exposes an **Instagram experiment** field when the backend is available. The API endpoint is `POST /analyze/instagram` with JSON fields `url` and `consent`. Anonymous public-post lookup is attempted when no session variables are configured, but authenticated sessions are generally more reliable. The experiment currently rejects video and sidecar posts.
+For hosted deployment, do not upload the session file or password to GitHub. Set `INSTAGRAM_USERNAME`, `GEOTRACE_INSTAGRAM_ENABLED=true`, and a sealed `INSTALOADER_SESSION_BASE64` hosting secret. GeoTrace reconstructs the session only in a temporary permission-restricted file and deletes it immediately after loading.
+
+The website exposes an **Instagram import** field when the backend reports that the feature is enabled. The API endpoint is `POST /analyze/instagram` with JSON fields `url` and `consent`; `GET /instagram/status` reports availability without exposing session data. Anonymous public-post lookup is attempted when no session variables are configured, but authenticated sessions are generally more reliable. The importer currently rejects video and sidecar posts.
 
 Remaining website sections still require the user's section-by-section approval: problem framing; full evidence-fusion demo; capabilities; forensic rigor; final CTA/footer.

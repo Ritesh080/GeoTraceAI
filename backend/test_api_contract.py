@@ -1,6 +1,6 @@
 import unittest
 
-from backend.api import health, root
+from backend.api import health, instagram_status, root
 
 
 class ApiContractTests(unittest.TestCase):
@@ -13,6 +13,11 @@ class ApiContractTests(unittest.TestCase):
         response = root()
         self.assertIn(b'"docs":"/docs"', response.body)
         self.assertIn(b'"health":"/health"', response.body)
+
+    def test_instagram_status_has_no_session_material(self):
+        response = instagram_status()
+        self.assertIn(response["status"], {"active", "disabled"})
+        self.assertNotIn("password", response)
 
 
 if __name__ == "__main__":

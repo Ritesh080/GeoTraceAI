@@ -17,6 +17,7 @@ Endpoints:
 - `GET /health`
 - `GET /ready` for operational readiness without pretending optional indexes are present
 - `GET /coverage` for reference counts, spatial coverage, fingerprints, and calibration status
+- `GET /instagram/status` for enabled/authenticated import status without exposing session data
 - `GET /capabilities`
 - `POST /analyze` with multipart field `file` and optional booleans `visual_geolocation`, `map_verification`, `street_imagery_comparison`, and `source_provenance`
 - `POST /analyze/instagram` for one consented, permitted single-image post
@@ -60,3 +61,7 @@ docker run --rm -p 8000:8000 \
 ```
 
 After deployment, rebuild the frontend with `NEXT_PUBLIC_GEOTRACE_API_URL=https://YOUR-API-HOST` and publish it. Keep the API on HTTPS; browsers will block an HTTP API from the HTTPS website.
+
+## Hosted Instagram session
+
+Never deploy an Instagram password. Create the Instaloader session interactively on a trusted computer, encode that session file as base64, and store the encoded value as a sealed hosting secret named `INSTALOADER_SESSION_BASE64`. Set `INSTAGRAM_USERNAME` and `GEOTRACE_INSTAGRAM_ENABLED=true` alongside it. The service writes the session to a permission-restricted temporary file only long enough for Instaloader to load it, then deletes that temporary file. `railway.json` configures Docker deployment and checks `/ready` before new releases receive traffic.

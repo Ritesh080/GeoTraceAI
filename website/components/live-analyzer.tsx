@@ -390,6 +390,7 @@ export function LiveAnalyzer() {
   const [selectedMapCandidateId, setSelectedMapCandidateId] = useState<string | null>(null);
   const [instagramUrl, setInstagramUrl] = useState('');
   const [instagramConsent, setInstagramConsent] = useState(false);
+  const [instagramProvider, setInstagramProvider] = useState<{enabled: boolean; authenticated: boolean} | null>(null);
   const [coverage, setCoverage] = useState<CoverageReport | null>(null);
 
   const checkService = useCallback(async () => {
@@ -400,15 +401,17 @@ export function LiveAnalyzer() {
     setService('checking');
     try {
       await axios.get(`${apiUrl}/health`, { timeout: 3000 });
-      const [capabilityResponse, coverageResponse] = await Promise.all([
+      const [capabilityResponse, coverageResponse, instagramResponse] = await Promise.all([
         axios.get<{capabilities: Array<{capability: string; status: string}>}>(`${apiUrl}/capabilities`, { timeout: 3000 }),
         axios.get<CoverageReport>(`${apiUrl}/coverage`, { timeout: 3000 }),
+        axios.get<{enabled: boolean; authenticated: boolean}>(`${apiUrl}/instagram/status`, { timeout: 3000 }),
       ]);
       setVisualProviderActive(capabilityResponse.data.capabilities.some(item => item.capability === 'Visual geolocation' && item.status === 'active'));
       setMapProviderActive(capabilityResponse.data.capabilities.some(item => item.capability === 'Automated map context verification' && item.status === 'active'));
       setStreetProviderActive(capabilityResponse.data.capabilities.some(item => item.capability === 'Street-level imagery comparison' && item.status === 'active'));
       setProvenanceProviderActive(capabilityResponse.data.capabilities.some(item => item.capability === 'Reverse-image and source provenance' && item.status === 'active'));
       setCoverage(coverageResponse.data);
+      setInstagramProvider(instagramResponse.data);
       setService('ready');
     } catch {
       setVisualProviderActive(false);
@@ -420,6 +423,7 @@ export function LiveAnalyzer() {
       setProvenanceProviderActive(false);
       setSourceProvenance(false);
       setCoverage(null);
+      setInstagramProvider(null);
       setService('offline');
     }
   }, [apiUrl]);
@@ -483,7 +487,7 @@ export function LiveAnalyzer() {
   }
 
   async function runInstagramAnalysis() {
-    if (!apiUrl || service !== 'ready' || !instagramUrl.trim() || !instagramConsent || running) return;
+    if (!apiUrl || service !== 'ready' || !instagramProvider?.enabled || !instagramUrl.trim() || !instagramConsent || running) return;
     setRunning(true);
     setAnalysisStage('Retrieving Instagram post');
     setError(null);
@@ -563,11 +567,11 @@ export function LiveAnalyzer() {
           <Button type="button" onClick={runAnalysis} disabled={!file || running || !['ready', 'browser'].includes(service)}>{running ? <><LoaderCircle className="spin" size={18}/> {analysisStage}</> : service === 'browser' ? 'Analyze in browser' : 'Run forensic analysis'}</Button>
         </div>
         <div className="instagram-import">
-          <div className="instagram-label"><Instagram size={17}/><div><strong>Instagram experiment</strong><span>Import one permitted public image post</span></div></div>
+          <div className="instagram-label"><Instagram size={17}/><div><strong>Instagram import</strong><span>{instagramProvider?.enabled ? `${instagramProvider.authenticated ? 'Authenticated' : 'Public'} single-image post lookup` : 'Requires the connected analysis service'}</span></div></div>
           <label htmlFor="instagram-post-url" className="sr-only">Instagram post URL</label>
-          <input id="instagram-post-url" type="url" value={instagramUrl} onChange={event => setInstagramUrl(event.target.value)} placeholder="https://www.instagram.com/p/.../" disabled={service !== 'ready' || running}/>
-          <label className="instagram-consent"><input type="checkbox" checked={instagramConsent} onChange={event => setInstagramConsent(event.target.checked)} disabled={service !== 'ready' || running}/><span>I have permission to retrieve and analyze this post.</span></label>
-          <Button variant="outline" type="button" onClick={runInstagramAnalysis} disabled={service !== 'ready' || !instagramUrl.trim() || !instagramConsent || running}>{running && analysisStage.includes('Instagram') ? <><LoaderCircle className="spin" size={18}/> {analysisStage}</> : 'Import and analyze post'}</Button>
+          <input id="instagram-post-url" type="url" value={instagramUrl} onChange={event => setInstagramUrl(event.target.value)} placeholder="https://www.instagram.com/p/.../" disabled={service !== 'ready' || !instagramProvider?.enabled || running}/>
+          <label className="instagram-consent"><input type="checkbox" checked={instagramConsent} onChange={event => setInstagramConsent(event.target.checked)} disabled={service !== 'ready' || !instagramProvider?.enabled || running}/><span>I have permission to retrieve and analyze this post.</span></label>
+          <Button variant="outline" type="button" onClick={runInstagramAnalysis} disabled={service !== 'ready' || !instagramProvider?.enabled || !instagramUrl.trim() || !instagramConsent || running}>{running && analysisStage.includes('Instagram') ? <><LoaderCircle className="spin" size={18}/> {analysisStage}</> : 'Import and analyze post'}</Button>
         </div>
       </div>
 

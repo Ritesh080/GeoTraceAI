@@ -25,6 +25,7 @@ from backend.instagram_source import (  # noqa: E402
     InstagramImportError,
     InstagramProviderError,
     analyze_instagram_post,
+    instagram_provider_status,
 )
 from backend.osint_stage import build_osint_assessment
 from backend.geolocation import provider_capabilities
@@ -90,7 +91,7 @@ async def security_headers(request, call_next):
 
 @app.get("/", include_in_schema=False)
 def root() -> JSONResponse:
-    return JSONResponse({"service": "GeoTrace AI Analysis API", "docs": "/docs", "health": "/health", "readiness": "/ready", "coverage": "/coverage"})
+    return JSONResponse({"service": "GeoTrace AI Analysis API", "docs": "/docs", "health": "/health", "readiness": "/ready", "coverage": "/coverage", "instagram": "/instagram/status"})
 
 
 @app.get("/health")
@@ -118,6 +119,11 @@ def ready() -> dict:
 @app.get("/coverage")
 def coverage() -> dict:
     return coverage_report()
+
+
+@app.get("/instagram/status")
+def instagram_status() -> dict:
+    return instagram_provider_status()
 
 
 @app.get("/capabilities")
@@ -222,6 +228,8 @@ async def analyze(
 @app.post("/analyze/instagram")
 async def analyze_instagram(request: InstagramAnalyzeRequest) -> dict:
     """Import one user-requested Instagram image post for forensic analysis."""
+    if not instagram_provider_status()["enabled"]:
+        raise HTTPException(503, "Instagram import is not enabled on this deployment.")
     if not request.consent:
         raise HTTPException(400, "Confirm permission before retrieving the Instagram post.")
 

@@ -6,6 +6,8 @@ optional and, when configured, is loaded from an Instaloader session file.
 """
 from __future__ import annotations
 
+import base64
+import binascii
 import os
 import re
 import sys
@@ -65,15 +67,55 @@ def build_loader() -> instaloader.Instaloader:
         max_connection_attempts=2,
     )
 
-    username = os.getenv("INSTAGRAM_USERNAME")
-    session_file = os.getenv("INSTALOADER_SESSION_FILE")
-    if username and session_file:
+    username = os.getenv("INSTAGRAM_USERNAME", "").strip()
+    session_file = os.getenv("INSTALOADER_SESSION_FILE", "").strip()
+    session_base64 = os.getenv("INSTALOADER_SESSION_BASE64", "").strip()
+    if session_base64 and not username:
+        loader.close()
+        raise InstagramImportError("INSTAGRAM_USERNAME is required with the saved Instagram session.")
+    if session_base64:
+        try:
+            session_bytes = base64.b64decode(session_base64, validate=True)
+        except (ValueError, binascii.Error) as error:
+            loader.close()
+            raise InstagramImportError("The configured Instagram session secret is invalid.") from error
+        if not session_bytes or len(session_bytes) > 1024 * 1024:
+            loader.close()
+            raise InstagramImportError("The configured Instagram session secret has an invalid size.")
+        session_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, prefix="geotrace-instagram-session-") as temporary:
+                temporary.write(session_bytes)
+                session_path = Path(temporary.name)
+            session_path.chmod(0o600)
+            loader.load_session_from_file(username, str(session_path))
+        finally:
+            if session_path:
+                session_path.unlink(missing_ok=True)
+    elif username and session_file:
         session_path = Path(session_file).expanduser()
         if not session_path.is_file():
             loader.close()
             raise InstagramImportError("The configured Instaloader session file was not found.")
         loader.load_session_from_file(username, str(session_path))
     return loader
+
+
+def instagram_provider_status() -> dict:
+    """Describe availability without exposing credentials or session material."""
+    enabled = os.getenv("GEOTRACE_INSTAGRAM_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
+    username = os.getenv("INSTAGRAM_USERNAME", "").strip()
+    session_base64 = os.getenv("INSTALOADER_SESSION_BASE64", "").strip()
+    session_file = os.getenv("INSTALOADER_SESSION_FILE", "").strip()
+    session_file_ready = bool(username and session_file and Path(session_file).expanduser().is_file())
+    authenticated = bool(username and session_base64) or session_file_ready
+    return {
+        "status": "active" if enabled else "disabled",
+        "enabled": enabled,
+        "authenticated": authenticated,
+        "mode": "authenticated_session" if authenticated else "public_post_lookup",
+        "supports": "single_image_posts",
+    }
 
 
 def _location_payload(post: instaloader.Post) -> dict | None:
