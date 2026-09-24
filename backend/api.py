@@ -53,6 +53,7 @@ from backend.local_source_provenance import (
 from backend.index_coverage import coverage_report
 from evidence_fusion import fuse_evidence
 from conflict_detection import analyze_conflicts
+from micro_osint import attach_micro_osint_workspace, build_micro_osint_ledger
 
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
@@ -68,7 +69,7 @@ ALLOWED_ORIGINS = [
 
 ANALYSIS_SEMAPHORE = asyncio.Semaphore(max(1, int(os.getenv("GEOTRACE_ANALYSIS_CONCURRENCY", "2"))))
 
-app = FastAPI(title="GeoTrace AI Analysis API", version="0.3.0")
+app = FastAPI(title="GeoTrace AI Analysis API", version="0.4.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -81,6 +82,11 @@ app.add_middleware(
 class InstagramAnalyzeRequest(BaseModel):
     url: str = Field(min_length=20, max_length=500)
     consent: bool = False
+
+
+class MicroOsintRequest(BaseModel):
+    candidate_ids: list[str] = Field(default_factory=list, max_length=100)
+    clues: list[dict] = Field(default_factory=list, max_length=250)
 
 
 @app.middleware("http")
@@ -132,6 +138,15 @@ def instagram_status() -> dict:
 def capabilities() -> dict:
     """Report active, adapter-ready, and still-manual geolocation features."""
     return {"capabilities": provider_capabilities()}
+
+
+@app.post("/micro-osint/evaluate")
+def evaluate_micro_osint(request: MicroOsintRequest) -> dict:
+    """Validate an analyst's clue ledger without issuing a location verdict."""
+    try:
+        return build_micro_osint_ledger(request.clues, request.candidate_ids)
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
 
 
 @app.post("/analyze")
@@ -221,6 +236,7 @@ async def analyze(
                 raise HTTPException(503, str(error)) from error
             except LocalProvenanceError as error:
                 raise HTTPException(502, str(error)) from error
+        result["osint"] = attach_micro_osint_workspace(result["osint"])
         result["osint"] = analyze_conflicts(result, result["osint"])
         result["evidence_fusion"] = fuse_evidence(result, result["osint"])
         return result
@@ -250,6 +266,7 @@ async def analyze_instagram(request: InstagramAnalyzeRequest) -> dict:
         metadata=result["metadata"],
         source=result["source"],
     )
+    result["osint"] = attach_micro_osint_workspace(result["osint"])
     result["osint"] = analyze_conflicts(result, result["osint"])
     result["evidence_fusion"] = fuse_evidence(result, result["osint"])
     return result

@@ -1,6 +1,6 @@
 import unittest
 
-from backend.api import health, instagram_status, root
+from backend.api import MicroOsintRequest, evaluate_micro_osint, health, instagram_status, root
 
 
 class ApiContractTests(unittest.TestCase):
@@ -18,6 +18,12 @@ class ApiContractTests(unittest.TestCase):
         response = instagram_status()
         self.assertIn(response["status"], {"active", "disabled"})
         self.assertNotIn("password", response)
+
+    def test_micro_osint_endpoint_returns_non_conclusive_workspace(self):
+        response = evaluate_micro_osint(MicroOsintRequest(candidate_ids=["candidate-a"], clues=[]))
+        self.assertEqual(response["status"], "ready_for_analyst_input")
+        self.assertFalse(response["assessment"]["formal_location_conclusion"])
+        self.assertIsNone(response["assessment"]["numeric_location_probability"])
 
 
 if __name__ == "__main__":

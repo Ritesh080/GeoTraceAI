@@ -24,6 +24,11 @@ IMAGE
                               Final Location + Confidence + Report
 ```
 
+The location branch also includes an analyst-led Micro-OSINT workspace. It
+records infrastructure, road, vehicle, language, vegetation, terrain, and
+built-environment clues without converting them directly into a location
+verdict.
+
 ### Cyber Pipeline Detail
 
 ```
@@ -36,6 +41,7 @@ Image
   → Forensic Reliability Engine        ← Phase 4
   → AI/Cyber Evidence Integration      ← Phase 5
   → Conflict Detection                 ← Phase 6
+  → Micro-OSINT Evidence Ledger         ← Location investigation layer
   → Final Forensic Report              ← Phase 7
 ```
 
@@ -737,6 +743,38 @@ Conservative rules prevent false contradictions: missing evidence is not a confl
 
 Phase 6 tests cover distant and nearby candidates, unreliable embedded GPS, and the low-street-similarity safeguard.
 
+## Micro-OSINT Evidence Ledger
+
+**Status:** FOUNDATION COMPLETED
+
+`micro_osint.py` provides a structured analyst workspace for hyper-local visual
+clues. Every record keeps three stages separate:
+
+1. **Observation** — a factual description and optional normalized image region.
+2. **Inference** — a candidate relationship (`supports`, `excludes`, or `neutral`)
+   and an explicit method-maturity label.
+3. **Verification** — analyst identity, review state, references, retrieval date,
+   licence, and notes.
+
+The initial taxonomy covers utility infrastructure, street furniture, road
+systems, vehicle registration, the built environment, language/text, flora and
+land use, terrain/geology, weather/light, and commercial/civic clues.
+
+Safeguards are enforced in code:
+
+- Multiple clues from the submitted photograph count as one dependent source.
+- Only verified clues using validated methods enter advisory candidate filters.
+- Experimental and unvalidated methods remain research leads.
+- Negative evidence must explicitly name the candidate it excludes.
+- Missing evidence is never converted into a contradiction.
+- Uncalibrated confidence, score, and probability fields are rejected.
+- The ledger never produces a formal location conclusion.
+
+The API exposes `POST /micro-osint/evaluate` for validating analyst-created
+ledgers. Every normal image analysis also receives an empty Micro-OSINT
+workspace populated with the current candidate IDs so investigation can begin
+without altering candidate ranking.
+
 ## Upcoming Phases
 
 ### Phase 7 — Final Forensic Report
@@ -754,3 +792,4 @@ Generates the complete `cyber_result.json` with all findings, scores, and a huma
 | 2026-09-05 | 4 | Forensic reliability engine: weighted scoring, continuous adjustments, reliability levels |
 | 2026-09-22 | 5 | AI/Cyber evidence integration with score separation, dependency-aware source counting, and abstention gates |
 | 2026-09-22 | 6 | Typed cross-source conflict detection with severity, distance, integrity checks, and mandatory abstention |
+| 2026-09-24 | Micro-OSINT | Structured observation/inference/verification ledger with dependency-aware advisory candidate filters |
