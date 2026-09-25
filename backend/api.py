@@ -29,6 +29,7 @@ from backend.instagram_source import (  # noqa: E402
 )
 from backend.osint_stage import build_osint_assessment
 from backend.geolocation import provider_capabilities
+from backend.gods_eye_context import area_view_status, attach_area_view_links
 from backend.local_visual_model import (
     LocalVisualModelError,
     LocalVisualModelNotTrained,
@@ -99,7 +100,7 @@ async def security_headers(request, call_next):
 
 @app.get("/", include_in_schema=False)
 def root() -> JSONResponse:
-    return JSONResponse({"service": "GeoTrace AI Analysis API", "docs": "/docs", "health": "/health", "readiness": "/ready", "coverage": "/coverage", "instagram": "/instagram/status"})
+    return JSONResponse({"service": "GeoTrace AI Analysis API", "docs": "/docs", "health": "/health", "readiness": "/ready", "coverage": "/coverage", "instagram": "/instagram/status", "area_view": "/area-view/status"})
 
 
 @app.get("/health")
@@ -132,6 +133,11 @@ def coverage() -> dict:
 @app.get("/instagram/status")
 def instagram_status() -> dict:
     return instagram_provider_status()
+
+
+@app.get("/area-view/status")
+def get_area_view_status() -> dict:
+    return area_view_status()
 
 
 @app.get("/capabilities")
@@ -236,6 +242,7 @@ async def analyze(
                 raise HTTPException(503, str(error)) from error
             except LocalProvenanceError as error:
                 raise HTTPException(502, str(error)) from error
+        result["osint"] = attach_area_view_links(result["osint"])
         result["osint"] = attach_micro_osint_workspace(result["osint"])
         result["osint"] = analyze_conflicts(result, result["osint"])
         result["evidence_fusion"] = fuse_evidence(result, result["osint"])
@@ -266,6 +273,7 @@ async def analyze_instagram(request: InstagramAnalyzeRequest) -> dict:
         metadata=result["metadata"],
         source=result["source"],
     )
+    result["osint"] = attach_area_view_links(result["osint"])
     result["osint"] = attach_micro_osint_workspace(result["osint"])
     result["osint"] = analyze_conflicts(result, result["osint"])
     result["evidence_fusion"] = fuse_evidence(result, result["osint"])
