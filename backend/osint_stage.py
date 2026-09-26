@@ -107,6 +107,7 @@ def build_osint_assessment(
                 }
             )
 
+    osintgram_clue_ids = []
     if source and source.get("platform") == "instagram":
         for clue_id, kind, label, value in (
             ("instagram_post", "publication_source", "Instagram post", source.get("canonical_url")),
@@ -136,12 +137,59 @@ def build_osint_assessment(
                 }
             )
 
+        osintgram = source.get("osintgram") or {}
+        if osintgram.get("status") in {"ready", "partial"}:
+            account_about = osintgram.get("account_about") or {}
+            profile = osintgram.get("profile") or {}
+            for clue_id, kind, label, value in (
+                ("osintgram_account_country", "account_context", "Account country", account_about.get("country")),
+                ("osintgram_account_created", "account_context", "Account creation month", account_about.get("date_joined")),
+                ("osintgram_business_city", "account_context", "Public business city", profile.get("city_name")),
+            ):
+                if value:
+                    clues.append({
+                        "id": clue_id,
+                        "kind": kind,
+                        "label": label,
+                        "value": str(value),
+                        "source_group": f"instagram_account:{source.get('owner_username', 'unknown')}",
+                    })
+                    osintgram_clue_ids.append(clue_id)
+            for index, tagged_location in enumerate((osintgram.get("locations") or [])[:5]):
+                clue_id = f"osintgram_tagged_location_{index + 1}"
+                clues.append({
+                    "id": clue_id,
+                    "kind": "platform_location_history",
+                    "label": "Tagged post location",
+                    "value": str(tagged_location.get("address") or tagged_location.get("name")),
+                    "source_group": f"instagram_account:{source.get('owner_username', 'unknown')}",
+                })
+                osintgram_clue_ids.append(clue_id)
+
     reasons = [
         "No independent web source has been collected yet.",
         "Reverse-image matches require a manual provider search or configured API adapter.",
     ]
     if not gps_usable:
         reasons.append("No valid embedded GPS coordinate is available for map verification.")
+    if osintgram_clue_ids:
+        reasons.append("OSINTgram profile and post-history clues come from the same Instagram account and are not independent location confirmation.")
+
+    dependency_groups = [
+        {
+            "id": source_group,
+            "label": "Instagram post" if source and source.get("platform") == "instagram" else "Submitted image",
+            "member_ids": [clue["id"] for clue in clues if clue["id"] not in osintgram_clue_ids],
+            "explanation": "Hash, EXIF, and file-forensic observations share one origin and count as one source group.",
+        }
+    ]
+    if osintgram_clue_ids:
+        dependency_groups.append({
+            "id": f"instagram_account:{source.get('owner_username', 'unknown')}",
+            "label": "OSINTgram public account context",
+            "member_ids": osintgram_clue_ids,
+            "explanation": "Profile and tagged-post observations are related Instagram account evidence and do not count as independent confirmation.",
+        })
 
     return {
         "status": "ready_for_review",
@@ -160,14 +208,7 @@ def build_osint_assessment(
         },
         "clues": clues,
         "actions": actions,
-        "dependency_groups": [
-            {
-                "id": source_group,
-                "label": "Instagram post" if source and source.get("platform") == "instagram" else "Submitted image",
-                "member_ids": [clue["id"] for clue in clues],
-                "explanation": "Hash, EXIF, and file-forensic observations share one origin and count as one source group.",
-            }
-        ],
+        "dependency_groups": dependency_groups,
         "candidates": location["candidates"],
         "conflicts": location["conflicts"],
         "provider_status": provider_capabilities(),

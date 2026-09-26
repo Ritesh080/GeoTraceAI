@@ -27,6 +27,7 @@ from backend.instagram_source import (  # noqa: E402
     analyze_instagram_post,
     instagram_provider_status,
 )
+from backend.osintgram_source import analyze_osintgram_account, osintgram_provider_status
 from backend.osint_stage import build_osint_assessment
 from backend.geolocation import provider_capabilities
 from backend.gods_eye_context import area_view_status, attach_area_view_links
@@ -132,7 +133,9 @@ def coverage() -> dict:
 
 @app.get("/instagram/status")
 def instagram_status() -> dict:
-    return instagram_provider_status()
+    status = instagram_provider_status()
+    status["osintgram"] = osintgram_provider_status()
+    return status
 
 
 @app.get("/area-view/status")
@@ -268,6 +271,10 @@ async def analyze_instagram(request: InstagramAnalyzeRequest) -> dict:
     except InstagramProviderError as error:
         raise HTTPException(502, str(error)) from error
 
+    result["source"]["osintgram"] = await asyncio.to_thread(
+        analyze_osintgram_account,
+        result["source"]["owner_username"],
+    )
     result["osint"] = build_osint_assessment(
         sha256=result["sha256"],
         metadata=result["metadata"],

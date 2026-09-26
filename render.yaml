@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: geotrace-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /ready
+    autoDeployTrigger: commit
+    envVars:
+      - key: GEOTRACE_ALLOWED_ORIGINS
+        value: https://geotrace-ai-forensics.riteshbhardwaj364.chatgpt.site
+      - key: GEOTRACE_ANALYSIS_CONCURRENCY
+        value: "1"
+      - key: GEOTRACE_INSTAGRAM_ENABLED
+        value: "true"
+      - key: GEOTRACE_OSINTGRAM_URL
+        value: http://127.0.0.1:8010
+      - key: GEOTRACE_OSINTGRAM_TIMEOUT_SECONDS
+        value: "75"
+      - key: INSTAGRAM_BACKEND
+        value: instagrapi
+      - key: HIKER_CACHE_PATH
+        value: /tmp/osintgram-cache/requests.sqlite3
+      - key: INSTAGRAM_USERNAME
+        sync: false
+      - key: INSTAGRAM_PASSWORD
+        sync: false
+      - key: INSTALOADER_SESSION_BASE64
+        sync: false
+      - key: OSINTGRAM_INSTAGRAPI_SESSION_BASE64
+        sync: false
