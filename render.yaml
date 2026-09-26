@@ -21,11 +21,3 @@ services:
         value: instagrapi
       - key: HIKER_CACHE_PATH
         value: /tmp/osintgram-cache/requests.sqlite3
-      - key: INSTAGRAM_USERNAME
-        sync: false
-      - key: INSTAGRAM_PASSWORD
-        sync: false
-      - key: INSTALOADER_SESSION_BASE64
-        sync: false
-      - key: OSINTGRAM_INSTAGRAPI_SESSION_BASE64
-        sync: false
