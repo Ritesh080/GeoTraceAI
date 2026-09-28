@@ -43,6 +43,32 @@ type AnalysisResult = {
     media_type: string;
     retrieved_at: string;
     location?: { name: string; latitude?: number | null; longitude?: number | null } | null;
+    location_lookup?: { status: string; authenticated: boolean; detail: string };
+    post_metadata?: {
+      shortcode?: string | null;
+      owner_username?: string | null;
+      published_at_utc?: string | null;
+      media_type?: string | null;
+      media_count?: number | null;
+      is_video?: boolean;
+      width?: number | null;
+      height?: number | null;
+      likes?: number | null;
+      comments?: number | null;
+      caption?: string | null;
+      hashtags?: string[];
+      mentions?: string[];
+      accessibility_caption?: string | null;
+      location_status?: string;
+      authenticated_lookup?: boolean;
+      evidence_note?: string;
+    };
+    osintgram?: {
+      status: string;
+      provider: string;
+      locations?: Array<{ name: string; address?: string | null; latitude: number; longitude: number; posted_at?: string | null }>;
+      errors?: string[];
+    };
   };
   osint: {
     status: string;
@@ -226,6 +252,10 @@ function openStreetMapEmbedUrl(latitude: number, longitude: number) {
 
 function openStreetMapUrl(latitude: number, longitude: number) {
   return `https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=16/${latitude}/${longitude}`;
+}
+
+function openStreetMapSearchUrl(placeName: string) {
+  return `https://www.openstreetmap.org/search?query=${encodeURIComponent(placeName)}`;
 }
 
 function detectWritingSystem(text: string) {
@@ -587,7 +617,9 @@ export function LiveAnalyzer() {
             <div><dt>Dimensions</dt><dd>{result.image_forensics?.structure?.width ?? '—'} × {result.image_forensics?.structure?.height ?? '—'}</dd></div>
             <div><dt>GPS metadata</dt><dd>{result.metadata.gps_present ? `${result.metadata.latitude}, ${result.metadata.longitude}` : result.metadata.gps_checked ? 'Not present' : 'Not checked'}</dd></div>
           </dl>
-          {result.source && <div className="source-record"><Instagram size={16}/><div><span>INSTAGRAM SOURCE</span><a href={result.source.canonical_url} target="_blank" rel="noreferrer">@{result.source.owner_username} · {result.source.shortcode}<ExternalLink size={12}/></a><small>{new Date(result.source.published_at).toLocaleString()} · one provenance group</small></div></div>}
+          {result.source && <div className="source-record"><Instagram size={16}/><div><span>INSTAGRAM SOURCE</span><a href={result.source.canonical_url} target="_blank" rel="noreferrer">@{result.source.owner_username} · {result.source.shortcode}<ExternalLink size={12}/></a><small>{new Date(result.source.published_at).toLocaleString()} · one provenance group</small>{result.source.location ? <><strong>{result.source.location.name}</strong>{typeof result.source.location.latitude === 'number' && typeof result.source.location.longitude === 'number' ? <a href={openStreetMapUrl(result.source.location.latitude, result.source.location.longitude)} target="_blank" rel="noreferrer">{result.source.location.latitude.toFixed(6)}, {result.source.location.longitude.toFixed(6)} · Open map <ExternalLink size={12}/></a> : <a href={openStreetMapSearchUrl(result.source.location.name)} target="_blank" rel="noreferrer">Search this place on the map <ExternalLink size={12}/></a>}<small>{result.source.location_lookup?.detail ?? 'Location attached to this post.'}</small></> : <small>{result.source.location_lookup?.detail ?? 'This post did not return a location claim.'}</small>}</div></div>}
+          {result.source?.post_metadata && <details className="instagram-metadata"><summary>Instagram post metadata</summary><dl><div><dt>Published</dt><dd>{result.source.post_metadata.published_at_utc ? new Date(result.source.post_metadata.published_at_utc).toLocaleString() : 'Unavailable'}</dd></div><div><dt>Media</dt><dd>{result.source.post_metadata.media_type ?? 'Unknown'}{result.source.post_metadata.width && result.source.post_metadata.height ? ` · ${result.source.post_metadata.width} × ${result.source.post_metadata.height}` : ''}</dd></div><div><dt>Engagement</dt><dd>{result.source.post_metadata.likes ?? '—'} likes · {result.source.post_metadata.comments ?? '—'} comments</dd></div><div><dt>Hashtags</dt><dd>{result.source.post_metadata.hashtags?.length ? result.source.post_metadata.hashtags.map(tag => `#${tag}`).join(' ') : 'None found'}</dd></div><div><dt>Mentions</dt><dd>{result.source.post_metadata.mentions?.length ? result.source.post_metadata.mentions.map(name => `@${name}`).join(' ') : 'None found'}</dd></div><div><dt>Accessibility text</dt><dd>{result.source.post_metadata.accessibility_caption ?? 'Unavailable'}</dd></div><div><dt>Caption</dt><dd>{result.source.post_metadata.caption ?? 'No caption'}</dd></div></dl><p>{result.source.post_metadata.evidence_note}</p></details>}
+          {!!result.source?.osintgram?.locations?.length && <div className="osintgram-locations"><span>OSINTGRAM · ACCOUNT LOCATION HISTORY</span>{result.source.osintgram.locations.map((location, index) => <div key={`${location.latitude}-${location.longitude}-${index}`}><strong>{location.address || location.name}</strong><a href={openStreetMapUrl(location.latitude, location.longitude)} target="_blank" rel="noreferrer">{location.latitude.toFixed(6)}, {location.longitude.toFixed(6)} <ExternalLink size={12}/></a>{location.posted_at && <small>{location.posted_at}</small>}</div>)}<p>These are related account-history clues, not the confirmed location of the submitted post.</p></div>}
           {result.metadata.ocr_text && <div className="ocr-result"><span>VISIBLE TEXT · {result.metadata.language_hint ?? 'Script unresolved'} · {result.metadata.ocr_confidence}% OCR</span><p>{result.metadata.ocr_text}</p></div>}
           <div className="hash-row"><span>SHA-256</span><code>{result.sha256}</code></div>
           <div className="indicator-list"><span>Indicators</span>{result.forensics.indicators.length ? <ul>{result.forensics.indicators.slice(0,4).map(item=><li key={item}>{item.replaceAll('_',' ')}</li>)}</ul> : <p>No configured indicators triggered.</p>}</div>

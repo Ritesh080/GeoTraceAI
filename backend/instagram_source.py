@@ -26,6 +26,9 @@ from main import analyze_image  # noqa: E402
 
 
 MAX_REMOTE_MEDIA_BYTES = 20 * 1024 * 1024
+MAX_CAPTION_CHARS = 10_000
+MAX_ACCESSIBILITY_CHARS = 2_000
+MAX_CAPTION_TERMS = 100
 SHORTCODE_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 ALLOWED_HOSTS = {"instagram.com", "www.instagram.com"}
 
@@ -118,18 +121,137 @@ def instagram_provider_status() -> dict:
     }
 
 
-def _location_payload(post: instaloader.Post) -> dict | None:
-    """Read the optional Instagram location claim without making it mandatory."""
+def _valid_coordinate_pair(latitude: object, longitude: object) -> bool:
+    return (
+        isinstance(latitude, (int, float))
+        and not isinstance(latitude, bool)
+        and isinstance(longitude, (int, float))
+        and not isinstance(longitude, bool)
+        and -90 <= float(latitude) <= 90
+        and -180 <= float(longitude) <= 180
+    )
+
+
+def _public_location_claim(post: instaloader.Post) -> dict | None:
+    """Recover the public place label already present in the post payload.
+
+    Instaloader intentionally returns ``None`` from ``Post.location`` while
+    logged out because Instagram requires authentication for its location
+    detail request. The post payload can still contain the public location
+    name. Preserve that label, but never invent coordinates when the detail
+    lookup is unavailable.
+    """
+    node = getattr(post, "_node", None)
+    raw_location = node.get("location") if isinstance(node, dict) else None
+    if not isinstance(raw_location, dict) or not raw_location.get("name"):
+        return None
+
+    latitude = raw_location.get("lat")
+    longitude = raw_location.get("lng")
+    coordinates_available = _valid_coordinate_pair(latitude, longitude)
+    return {
+        "name": str(raw_location["name"])[:240],
+        "latitude": float(latitude) if coordinates_available else None,
+        "longitude": float(longitude) if coordinates_available else None,
+    }
+
+
+def _location_lookup(post: instaloader.Post) -> dict:
+    """Return the exact post claim plus an explicit lookup outcome."""
+    public_claim = _public_location_claim(post)
+    authenticated = bool(getattr(getattr(post, "_context", None), "is_logged_in", False))
     try:
         location = post.location
-    except instaloader.exceptions.InstaloaderException:
-        return None
+    except instaloader.exceptions.InstaloaderException as error:
+        return {
+            "status": "public_label_only" if public_claim else "lookup_failed",
+            "authenticated": authenticated,
+            "location": public_claim,
+            "detail": (
+                "The public post label was recovered, but Instagram blocked the coordinate lookup."
+                if public_claim
+                else f"Instagram location lookup failed: {type(error).__name__}."
+            ),
+        }
     if not location:
-        return None
+        return {
+            "status": "public_label_only" if public_claim else "not_present" if authenticated else "authentication_required",
+            "authenticated": authenticated,
+            "location": public_claim,
+            "detail": (
+                "The post exposes a public place label; sign in to request its coordinates."
+                if public_claim
+                else "The post has no visible location claim."
+                if authenticated
+                else "An authenticated Instagram session is required to distinguish no location from a blocked lookup."
+            ),
+        }
+
+    latitude = location.lat
+    longitude = location.lng
+    coordinates_available = _valid_coordinate_pair(latitude, longitude)
     return {
-        "name": location.name,
-        "latitude": location.lat,
-        "longitude": location.lng,
+        "status": "available",
+        "authenticated": authenticated,
+        "location": {
+            "name": str(location.name)[:240],
+            "latitude": float(latitude) if coordinates_available else None,
+            "longitude": float(longitude) if coordinates_available else None,
+        },
+        "detail": "Exact location claim attached to this Instagram post.",
+    }
+
+
+def _post_attribute(post: instaloader.Post, name: str, default: object = None) -> object:
+    """Read one Instaloader property without losing the rest of the report."""
+    try:
+        return getattr(post, name)
+    except (instaloader.exceptions.InstaloaderException, AttributeError, KeyError, TypeError, ValueError):
+        return default
+
+
+def _nonnegative_integer(value: object) -> int | None:
+    return int(value) if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+
+
+def _post_metadata(post: instaloader.Post, location_lookup: dict) -> dict:
+    """Normalize bounded public post metadata for the forensic response."""
+    node = getattr(post, "_node", None)
+    dimensions = node.get("dimensions", {}) if isinstance(node, dict) else {}
+    if not isinstance(dimensions, dict):
+        dimensions = {}
+
+    published_at = _post_attribute(post, "date_utc")
+    caption = _post_attribute(post, "caption")
+    accessibility_caption = _post_attribute(post, "accessibility_caption")
+    hashtags = _post_attribute(post, "caption_hashtags", [])
+    mentions = _post_attribute(post, "caption_mentions", [])
+
+    return {
+        "shortcode": str(_post_attribute(post, "shortcode", ""))[:120] or None,
+        "owner_username": str(_post_attribute(post, "owner_username", ""))[:120] or None,
+        "published_at_utc": published_at.isoformat() if isinstance(published_at, datetime) else None,
+        "media_type": str(_post_attribute(post, "typename", ""))[:80] or None,
+        "media_count": _nonnegative_integer(_post_attribute(post, "mediacount")),
+        "is_video": bool(_post_attribute(post, "is_video", False)),
+        "width": _nonnegative_integer(dimensions.get("width")),
+        "height": _nonnegative_integer(dimensions.get("height")),
+        "likes": _nonnegative_integer(_post_attribute(post, "likes")),
+        "comments": _nonnegative_integer(_post_attribute(post, "comments")),
+        "caption": str(caption)[:MAX_CAPTION_CHARS] if caption else None,
+        "hashtags": [str(value)[:100] for value in hashtags[:MAX_CAPTION_TERMS]] if isinstance(hashtags, list) else [],
+        "mentions": [str(value)[:100] for value in mentions[:MAX_CAPTION_TERMS]] if isinstance(mentions, list) else [],
+        "accessibility_caption": (
+            str(accessibility_caption)[:MAX_ACCESSIBILITY_CHARS]
+            if accessibility_caption else None
+        ),
+        "location": location_lookup.get("location"),
+        "location_status": location_lookup.get("status"),
+        "authenticated_lookup": bool(location_lookup.get("authenticated")),
+        "evidence_note": (
+            "Platform-supplied post metadata captured at retrieval time; engagement counts can change "
+            "and location remains an unverified platform claim."
+        ),
     }
 
 
@@ -172,6 +294,8 @@ def analyze_instagram_post(url: str) -> dict:
 
         # Avoid returning temporary server paths and the large raw ExifTool dump.
         result.pop("raw_exif", None)
+        location_lookup = _location_lookup(post)
+        post_metadata = _post_metadata(post, location_lookup)
         result["source"] = {
             "platform": "instagram",
             "source_group": f"instagram:{shortcode}",
@@ -182,7 +306,13 @@ def analyze_instagram_post(url: str) -> dict:
             "caption": post.caption,
             "media_type": post.typename,
             "retrieved_at": datetime.now(timezone.utc).isoformat(),
-            "location": _location_payload(post),
+            "location": location_lookup["location"],
+            "location_lookup": {
+                "status": location_lookup["status"],
+                "authenticated": location_lookup["authenticated"],
+                "detail": location_lookup["detail"],
+            },
+            "post_metadata": post_metadata,
         }
         return result
     finally:
