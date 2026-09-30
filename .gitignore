@@ -41,3 +41,20 @@ backend/models/.geotrace-reference-build.lock
 
 # OCR model cache
 *.traineddata
+
+# Test/user images
+datasets/test_images/*
+!datasets/test_images/.gitkeep
+
+# Secrets
+.env
+*.key
+
+# Generated local GeoNames index
+datasets/geonames/*.zip
+datasets/geonames/*.sqlite3
+
+# Local Obsidian state and unrelated exported artifacts
+Geo Trace/.obsidian/
+Geo Trace/tmp/
+Geo Trace/zorven-theloser-homepage/
