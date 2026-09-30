@@ -275,12 +275,18 @@
       } else { assessmentPanel.classList.add('hidden'); }
       const list = document.getElementById('candidateList'); list.replaceChildren();
       const clusters = consensus.clusters || [];
-      if (!clusters.length) {
+      const isSocialEvidence = data.evidence_source?.type === 'social_media';
+      const mayDisplaySocialLocation = !isSocialEvidence || assessment.show_location === true;
+      if (isSocialEvidence && !mayDisplaySocialLocation) {
+        const message = document.createElement('div'); message.className = 'error';
+        message.textContent = `${assessment.display_message || 'No verified location is available.'} Technical model candidates, if any, remain in the evidence JSON for review.`;
+        list.append(message);
+      } else if (!clusters.length) {
         const message = document.createElement('div'); message.className = 'error';
         message.textContent = consensus.reason || data.reason || 'No valid location candidate was returned.';
         list.append(message);
       }
-      clusters.slice(0, 5).forEach(candidate => {
+      (mayDisplaySocialLocation ? clusters : []).slice(0, 5).forEach(candidate => {
         const card = document.createElement('article'); card.className = 'candidate';
         const top = document.createElement('div'); top.className = 'candidate-top';
         const rank = document.createElement('span'); rank.className = 'candidate-rank'; rank.textContent = `CANDIDATE ${String(candidate.rank).padStart(2, '0')}`;

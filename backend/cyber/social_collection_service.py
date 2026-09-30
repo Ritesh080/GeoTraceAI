@@ -173,6 +173,31 @@ def _filename(url: str, content_type: str) -> str:
     return f"{stem}{ALLOWED_IMAGE_TYPES[content_type]}"
 
 
+def _is_generic_platform_preview(
+    source_url: str,
+    final_url: str,
+    image_url: str,
+    page_metadata: dict[str, Any],
+) -> bool:
+    """Reject platform/login artwork that is not media from the requested post."""
+
+    source_host = (urlparse(source_url).hostname or "").casefold()
+    if not source_host.endswith("instagram.com"):
+        return False
+
+    title = str(page_metadata.get("title") or "").strip().casefold()
+    description = str(page_metadata.get("description") or "").strip().casefold()
+    canonical_path = urlparse(
+        str(page_metadata.get("canonical_url") or final_url)
+    ).path.rstrip("/")
+    image_host = (urlparse(image_url).hostname or "").casefold()
+    return (
+        "create an account or log in to instagram" in description
+        or (title == "instagram" and not canonical_path)
+        or image_host == "static.cdninstagram.com"
+    )
+
+
 def collect_public_media(source_url: str, *, opener=None) -> dict:
     """Return one public preview image and provenance from a public page or image URL."""
 
@@ -252,6 +277,23 @@ def collect_public_media(source_url: str, *, opener=None) -> dict:
                 },
             }
         image_url = urljoin(final_url, image_reference)
+        if _is_generic_platform_preview(
+            source_url, final_url, image_url, page_metadata
+        ):
+            return {
+                "name": "",
+                "content_type": None,
+                "data": b"",
+                "collection": {
+                    "method": "automatic_public_page_metadata",
+                    "requested_url": source_url,
+                    "resolved_page_url": final_url,
+                    "resolved_image_url": image_url,
+                    "collected_at": datetime.now(timezone.utc).isoformat(),
+                    "page": page_metadata,
+                    "media_status": "generic_platform_preview_rejected",
+                },
+            }
         image_bytes, image_type, image_url, _ = _request(
             opener, image_url, MAX_IMAGE_BYTES
         )

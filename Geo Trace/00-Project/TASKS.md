@@ -15,6 +15,7 @@
 | P-08 | Add multimodal Instagram evidence fusion with a local India place-name index | Done | Codex |
 | P-09 | Allow text-only social-media evidence when no image is available | Done | Codex |
 | P-10 | Integrate, validate, commit, and push the local social-evidence work to GitHub | Done | Codex |
+| P-11 | Reject generic Instagram previews and abstain from uncorroborated social locations | Done | Codex |
 
 P-04 affected files: `backend/cyber/main.py`, `remote_geolocation.py`,
 `consensus_service.py`, related tests and README, plus the shared architecture,

@@ -41,6 +41,11 @@ text against a local India gazetteer and call a result corroborated only when
 independent evidence channels agree geographically. Never represent evidence
 coverage or heuristic text strength as calibrated location probability.
 
+Do not display a social-post coordinate as a location conclusion when only one
+uncorroborated location channel returned it. Display a lead only after
+independent geographic agreement or embedded GPS, and reject generic platform
+or login-page artwork before visual inference.
+
 ## Decision template
 - Date and title:
 - Status: proposed / accepted / superseded

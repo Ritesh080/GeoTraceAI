@@ -40,6 +40,15 @@ class FakeResponse:
 
 class FakeOpener:
     def open(self, request, timeout):
+        if "instagram.com" in request.full_url:
+            return FakeResponse(
+                request.full_url,
+                "text/html; charset=utf-8",
+                b'<meta property="og:title" content="Instagram">'
+                b'<meta property="og:description" content="Create an account or log in to Instagram - Share what you are into.">'
+                b'<meta property="og:image" content="https://static.cdninstagram.com/platform.png">'
+                b'<link rel="canonical" href="https://www.instagram.com/">',
+            )
         if request.full_url.endswith("/no-preview"):
             return FakeResponse(
                 request.full_url,
@@ -111,6 +120,21 @@ class SocialCollectionServiceTests(unittest.TestCase):
             "Evening at India Gate",
         )
         self.assertIsNone(result["collection"]["resolved_image_url"])
+
+    @patch(
+        "social_collection_service.validate_public_url",
+        side_effect=lambda value: value,
+    )
+    def test_rejects_generic_instagram_platform_preview(self, _validate):
+        result = collect_public_media(
+            "https://www.instagram.com/p/example/", opener=FakeOpener()
+        )
+
+        self.assertEqual(result["data"], b"")
+        self.assertEqual(
+            result["collection"]["media_status"],
+            "generic_platform_preview_rejected",
+        )
 
 
 if __name__ == "__main__":

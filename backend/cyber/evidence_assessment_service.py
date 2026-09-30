@@ -8,6 +8,10 @@ def assess_social_evidence(result: dict, source: dict) -> dict:
     consensus = result.get("geolocation", {}).get("consensus", {})
     selected = consensus.get("selected", {})
     ocr = result.get("visual_clues", {}).get("ocr", {})
+    collection = source.get("automatic_collection", {})
+    generic_preview_rejected = (
+        collection.get("media_status") == "generic_platform_preview_rejected"
+    )
 
     signals = {
         "source_provenance": bool(source.get("public_source_url")),
@@ -20,6 +24,7 @@ def assess_social_evidence(result: dict, source: dict) -> dict:
         == "success",
         "recognized_scene_text": bool(ocr.get("combined_text")),
         "independent_provider_agreement": selected.get("provider_count", 0) >= 2,
+        "generic_platform_preview_rejected": generic_preview_rejected,
     }
     weights = {
         "source_provenance": 8,
@@ -31,6 +36,7 @@ def assess_social_evidence(result: dict, source: dict) -> dict:
         "text_place_match": 12,
         "recognized_scene_text": 8,
         "independent_provider_agreement": 18,
+        "generic_platform_preview_rejected": 0,
     }
     coverage_score = sum(weights[name] for name, present in signals.items() if present)
 
@@ -63,6 +69,11 @@ def assess_social_evidence(result: dict, source: dict) -> dict:
         )
     if not signals["source_provenance"]:
         cautions.append("No public source URL was recorded for this media.")
+    if generic_preview_rejected:
+        cautions.append(
+            "Instagram returned generic platform artwork instead of the requested "
+            "post image. GeoTrace excluded it from visual geolocation."
+        )
     if (
         signals["source_provenance"]
         and not any(
@@ -76,8 +87,26 @@ def assess_social_evidence(result: dict, source: dict) -> dict:
             "authorized screenshot."
         )
 
+    show_location = (
+        signals["embedded_gps"] or signals["independent_provider_agreement"]
+    ) and not generic_preview_rejected
+    if not show_location and location_signal_count:
+        cautions.append(
+            "GeoTrace is withholding a location conclusion because the available "
+            "location signal is not independently corroborated."
+        )
+
     return {
         "level": level,
+        "show_location": show_location,
+        "display_status": (
+            "corroborated_location_lead" if show_location else "abstained_unverified"
+        ),
+        "display_message": (
+            "Location lead is supported by independent evidence channels."
+            if show_location
+            else "No location is shown because the available evidence is insufficient or uncorroborated."
+        ),
         "evidence_coverage_score": coverage_score,
         "score_note": (
             "Coverage measures which evidence channels were available. It is not the "

@@ -53,6 +53,9 @@ local SQLite index contains roughly 660,000 Indian geographic features and
 1.06 million names/aliases from GeoNames. Text candidates and GeoCLIP candidates
 remain separate providers; nearby results can form a multi-provider cluster.
 Evidence coverage reports channel availability rather than correctness.
+The social UI abstains from displaying coordinates when a lead has only one
+uncorroborated source. Instagram login-page/platform artwork is rejected before
+visual inference so GeoCLIP cannot assign a location to a generic preview.
 
 ## Layout
 - `../backend/cyber/`: current Python implementation

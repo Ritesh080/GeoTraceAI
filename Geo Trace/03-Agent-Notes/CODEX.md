@@ -114,3 +114,17 @@ Workspace setup created the shared notes from the observed repository. Connectio
 - Next action: monitor the GitHub-triggered deployment and keep the generated
   visual/gazetteer artifacts outside Git unless their licence and size permit
   distribution.
+
+## 2026-09-30 · P-11 false Instagram location prevention
+
+- Finding: unauthenticated Instagram can return its generic login-page image
+  and description for a post URL. The collector previously treated that image
+  as post media, allowing GeoCLIP to create an unrelated coordinate.
+- Changed: generic Instagram platform artwork is rejected before download and
+  visual inference. Social coordinates are withheld unless independent
+  providers agree or embedded GPS exists; technical candidates remain in the
+  raw evidence JSON.
+- Checks: 20 cyber tests pass, browser JavaScript parses, and a live request to
+  Instagram's generic fallback returned `generic_platform_preview_rejected`,
+  skipped GeoCLIP, and produced `abstained_unverified` with no displayed
+  location.

@@ -58,6 +58,11 @@ credential-bearing URLs, unsupported image formats, and oversized responses.
 Pages that require login, client-side rendering, or do not publish a preview
 image must still be supplied as an operator-captured screenshot or frame.
 
+Instagram may return its generic login-page artwork instead of the requested
+post image. GeoTrace detects that fallback, excludes it from GeoCLIP and OCR,
+and records an abstention. For social evidence, coordinates are displayed only
+when independent evidence channels agree or embedded GPS is available.
+
 Social evidence is analyzed multimodally. GeoTrace combines the displayed
 location tag, caption, hashtags, public-page title/description, structured page
 location, explicit coordinates, and on-image OCR with GeoCLIP. A local
