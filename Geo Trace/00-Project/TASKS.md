@@ -16,6 +16,10 @@
 | P-09 | Allow text-only social-media evidence when no image is available | Done | Codex |
 | P-10 | Integrate, validate, commit, and push the local social-evidence work to GitHub | Done | Codex |
 | P-11 | Reject generic Instagram previews and abstain from uncorroborated social locations | Done | Codex |
+| P-12 | Add authorized-record OSINT case search, evidence imports, permissions and audit | Done | Codex |
+
+P-12 affected files: new case-store service, OSINT web page, server routes,
+case-store/API tests, cyber documentation, ignore rules and shared handoff.
 
 P-04 affected files: `backend/cyber/main.py`, `remote_geolocation.py`,
 `consensus_service.py`, related tests and README, plus the shared architecture,

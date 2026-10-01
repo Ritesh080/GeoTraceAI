@@ -32,6 +32,10 @@ instance for the lifetime of the Python process.
 
 ### Local web interface
 
+The [OSINT case workspace](OSINT_CASES.md) is available at `/osint` on the local
+server. It supports sourced CSV/JSON records, name/phone search, case roles,
+revocation, and an audit trail. Case records and keys are excluded from Git.
+
 Start the dependency-free browser interface from the repository root:
 
 ```sh

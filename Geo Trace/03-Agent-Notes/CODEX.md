@@ -1,5 +1,24 @@
 # Codex handoffs
 
+## 2026-10-01 · P-12 authorized-record case OSINT
+
+- Added `case_osint_service.py`, `/osint`, and local `/api/osint/*` routes for
+  CSV/JSON imports, name/phone search, case roles, revocation and audit export.
+- Every import records its source, observation time, access basis, authorization
+  reference, importing investigator and evidence-envelope hash. Invalid batches
+  roll back; duplicate evidence is skipped. Distinct matches are never merged.
+- Case keys are hashed in a mode-600 SQLite database under ignored
+  `data/osint/`. Foreign browser origins and public server bindings are rejected.
+- Checks: 33 cyber tests (13 OSINT-specific), 25 root tests, 30 backend tests,
+  and 2 CSV parser tests pass. Syntax/compile checks pass; the browser shows the
+  new case workspace without console errors. HTTP tests import and search
+  synthetic business contacts and exercise authentication, isolation and roles.
+- No real cases or identifiers were seeded. External sources are not connected;
+  users import records they are authorized to use. This is a local prototype
+  with named bearer keys, not institutional SSO or encrypted database storage.
+- Next action: create the user's case, import its approved source records, and
+  add an institution-specific connector only after its access contract is known.
+
 Workspace setup created the shared notes from the observed repository. Connection verification is recorded in [[SETUP]].
 
 ## 2026-09-30 · P-04 provider integration

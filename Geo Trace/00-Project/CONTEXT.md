@@ -1,6 +1,6 @@
 # Current context
 
-Updated: 2026-09-30
+Updated: 2026-10-01
 Workspace verification marker: GEOTRACE-SHARED-CONTEXT-20260919
 
 ## Verified baseline
@@ -24,6 +24,12 @@ Workspace verification marker: GEOTRACE-SHARED-CONTEXT-20260919
   API completed a real GeoCLIP analysis of the repository sample image.
 
 ## Current focus
+The local `/osint` case workspace supports CSV/JSON imports, source and access
+provenance, exact normalized phone search, exact/partial name leads, case-scoped
+viewer/editor/owner keys, revocation and a hash-chained audit trail. It searches
+only records imported into that case. No external sources are connected. Keys
+are stored only as hashes, and private case storage is ignored by Git.
+
 Build an India-specific, locally owned geotagged image gallery and visual
 retrieval index for street-level matching. Agent connection checks and
 developer-handbook review remain separate open work.

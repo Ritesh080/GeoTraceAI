@@ -46,6 +46,17 @@ uncorroborated location channel returned it. Display a lead only after
 independent geographic agreement or embedded GPS, and reject generic platform
 or login-page artwork before visual inference.
 
+## 2026-10-01 — Authorized case-record OSINT
+Status: accepted by the user's explicit narrowed module request.
+
+Implement name/phone searches over case-scoped authorized records and published
+business contacts. Require source and access provenance on imports. Preserve
+email/payment identifiers as unverified source claims, keep ambiguous records
+separate, and never infer identity solely from name or phone matching. Enable
+the case API only through a loopback binding. Keep keys and case records out
+of Git, enforce roles server-side, and audit access. No leaked-record collection
+or automatic external source search is included.
+
 ## Decision template
 - Date and title:
 - Status: proposed / accepted / superseded

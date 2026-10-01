@@ -58,6 +58,17 @@ uncorroborated source. Instagram login-page/platform artwork is rejected before
 visual inference so GeoCLIP cannot assign a location to a generic preview.
 
 ## Layout
+The local case OSINT workspace is a separate `/osint` view served by
+`web_app.py`. JSON `/api/osint/*` actions use `case_osint_service.py` with a
+private SQLite store in `data/osint/`. Imports validate source category,
+authorization, observation time and every record before a transactional write.
+Search results retain the source claims and never establish identity. Named
+case keys enforce viewer/editor/owner roles on the server; grants, revocations,
+searches, record reads and access denials enter the per-case hash-chained audit.
+This local prototype uses key possession rather than institutional SSO and
+filesystem permissions rather than application-level database encryption.
+The hosted FastAPI website is a separate interface.
+
 - `../backend/cyber/`: current Python implementation
 - `../datasets/test_images/`: local sample images
 - `../tests/`: test directory

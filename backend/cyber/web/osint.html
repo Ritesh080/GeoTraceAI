@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GeoTrace · OSINT cases</title>
+<style>
+:root { color-scheme:dark; --bg:#081311; --panel:#112420; --line:#2b453d; --text:#eef7f2; --muted:#a8bdb3; --accent:#7ae6bc; }
+* { box-sizing:border-box; } body { margin:0; font:15px/1.55 system-ui,sans-serif; background:var(--bg); color:var(--text); }
+main { max-width:1220px; margin:auto; padding:30px 24px 60px; } a { color:var(--accent); }
+header { margin-bottom:24px; } h1 { font-size:40px; letter-spacing:-.04em; margin:12px 0; } h2 { font-size:19px; margin:0 0 12px; } h3 { margin:0 0 10px; }
+p { margin:9px 0; } .muted,small { color:var(--muted); } .grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+section,.card { padding:22px; border:1px solid var(--line); border-radius:16px; background:var(--panel); margin-bottom:18px; }
+label { display:block; color:var(--muted); margin:12px 0; font-size:13px; } input,select,textarea { width:100%; padding:10px 12px; margin-top:5px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--text); font:inherit; }
+textarea { resize:vertical; min-height:80px; } input[type=checkbox] { width:auto; margin-right:8px; } input[type=file] { padding:8px; }
+button { border:0; border-radius:8px; padding:11px 15px; font:600 14px system-ui; cursor:pointer; background:var(--accent); color:#06271a; margin:4px 6px 4px 0; }
+button.secondary { background:#25493e; color:var(--text); } button:disabled { opacity:.45; cursor:wait; } .hidden { display:none!important; }
+.banner { padding:13px; border:1px solid #6c5936; border-radius:10px; background:#302a19; margin:12px 0; } #status { min-height:30px; color:var(--accent); overflow-wrap:anywhere; }
+.error { color:#ffb0a1!important; } .key { overflow-wrap:anywhere; white-space:pre-wrap; font:13px/1.7 ui-monospace,monospace; }
+.badge { display:inline-block; border:1px solid var(--line); padding:3px 8px; border-radius:20px; font-size:12px; color:var(--accent); margin-right:5px; }
+.card { margin:12px 0; overflow-wrap:anywhere; } .card dl { display:grid; grid-template-columns:145px 1fr; gap:5px 12px; } dt { color:var(--muted); } dd { margin:0; }
+details { border-top:1px solid var(--line); margin-top:14px; padding-top:12px; } pre { overflow:auto; max-height:350px; font-size:12px; } #members div { padding:8px 0; border-bottom:1px solid var(--line); }
+@media(max-width:800px) { .grid { grid-template-columns:1fr; } h1 { font-size:32px; } .card dl { grid-template-columns:1fr; } }
+</style>
+</head>
+<body><main>
+<header><a href="/">← Image and social evidence</a><h1>OSINT case workspace</h1>
+<p class="muted">Search names and phone numbers in sourced records authorized for your case. Review public business contacts and recorded payment identifiers with their provenance.</p>
+<p class="banner">Search covers records imported into the selected case. No sources are connected yet. Import an authorized export or public business records with their source and access basis.</p></header>
+<div id="status" role="status" aria-live="polite"></div>
+<div id="entry" class="grid">
+<section><h2>Create a case</h2><form id="createForm">
+<label>Case reference<input name="reference" required maxlength="120" placeholder="Internal case reference"></label>
+<label>Investigation purpose<textarea name="purpose" required maxlength="1000"></textarea></label>
+<label>Owner / investigator name<input name="actor" required maxlength="120"></label>
+<button>Create case</button></form><small>Creation issues a local owner access key. Keep it securely; it cannot be recovered from the database.</small></section>
+<section><h2>Open an existing case</h2><form id="openForm">
+<label>Case ID<input name="case_id" required autocomplete="off"></label>
+<label>Case access key<input name="access_key" type="password" required autocomplete="off"></label>
+<button>Open case</button></form><small>Viewer: search and read. Editor: also import evidence. Owner: also grant/revoke access and inspect the audit trail.</small></section>
+</div>
+<section id="issued" class="hidden"><h2>Access issued</h2><p>Save this key securely and share it only with the named case member. GeoTrace stores its hash, not the key.</p><div id="issuedKey" class="key"></div><button id="hideKey" class="secondary">Hide key</button></section>
+<div id="workspace" class="hidden">
+<section><h2 id="caseTitle"></h2><p id="caseMeta" class="muted"></p><button id="lock" class="secondary">Lock case</button></section>
+<div class="grid">
+<section><h2>Search case evidence</h2><form id="searchForm">
+<label>Search by<select name="kind"><option value="name">Name</option><option value="phone">Phone number</option></select></label>
+<label>Name or number<input name="query" required maxlength="200" placeholder="Name or +country-code phone"></label>
+<small>10-digit numbers assume India (+91). Other countries require a country prefix.</small>
+<label>Reason for this search<textarea name="purpose" required maxlength="500"></textarea></label>
+<button>Search records</button></form></section>
+<section id="importPanel"><h2>Import evidence</h2><form id="importForm">
+<label>Source category<select name="source_type"><option value="authorized_case_record">Authorized case records</option><option value="public_business">Publicly published business contacts</option></select></label>
+<label>Source URL or internal record reference<input name="source_reference" required maxlength="2048"></label>
+<label>Observed / captured at<input name="observed_at" type="datetime-local" required></label>
+<label>Authorization reference<input name="authorization_reference" required maxlength="500" placeholder="Approved case access or public source reference"></label>
+<label>Access basis<textarea name="access_basis" required maxlength="1000" placeholder="How these records were obtained and authorized for this case"></textarea></label>
+<label>Evidence file (CSV or JSON)<input id="importFile" type="file" accept=".csv,.json,text/csv,application/json" required></label>
+<small>Up to 1,000 records / 4 MB. Fields: name, entity_type, phones, emails, payment_identifiers, notes. CSV lists use semicolons; JSON lists use arrays.</small>
+<label><input name="authorized" type="checkbox" required>I confirm access to these records is authorized for this case.</label>
+<button>Import records</button><button id="template" type="button" class="secondary">Download CSV template</button>
+</form><p id="importSummary" class="muted"></p></section>
+</div>
+<section><h2>Possible matches</h2><p class="banner">A matching name or phone is a lead. Shared names, recycled numbers and inaccurate source records can link unrelated people. Emails and payment identifiers are unverified source claims.</p><div id="searchSummary" class="muted"></div><div id="matches"><p class="muted">Run a case search to review matches.</p></div></section>
+<section id="accessPanel"><h2>Case access</h2><div id="members"></div><form id="grantForm">
+<label>Member name<input name="actor" required maxlength="120"></label><label>Role<select name="role"><option value="viewer">Viewer</option><option value="editor">Editor</option></select></label><button>Issue access key</button></form>
+<details><summary>Audit trail</summary><p class="muted">Imports, searches, record views and access changes are timestamped. The hash chain detects edits but is not externally anchored. Only owners can read the audit.</p><button id="loadAudit" class="secondary">Load audit</button><button id="downloadAudit" class="secondary" disabled>Download audit JSON</button><pre id="audit"></pre></details></section>
+</div></main>
+<script>
+const byId = id => document.getElementById(id);
+let session = null;
+let auditData = null;
+function status(message, error = false) { byId('status').textContent = message; byId('status').classList.toggle('error', error); }
+function fields(form) { return Object.fromEntries(new FormData(form)); }
+async function api(action, body, key = session?.access_key) {
+  const response = await fetch(`/api/osint/${action}`, { method:'POST', headers:{'Content-Type':'application/json', ...(key ? {Authorization:`Bearer ${key}`} : {})}, body:JSON.stringify(body) });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.reason || 'Case operation failed');
+  return data;
+}
+function saveSession(value) {
+  session = value;
+  // Keep keys in memory. Refreshing or locking clears access; reopen with the saved key.
+}
+function issued(data) { byId('issued').classList.remove('hidden'); byId('issuedKey').textContent = `Case ID: ${session.case_id}\nMember: ${data.actor}\nRole: ${data.role}\nAccess key: ${data.access_key}`; }
+function download(filename, content, type) { const url = URL.createObjectURL(new Blob([content], {type})); const link=document.createElement('a'); link.href=url; link.download=filename; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
+async function refresh() {
+  const info=await api('overview', {case_id:session.case_id});
+  byId('entry').classList.add('hidden'); byId('workspace').classList.remove('hidden');
+  byId('caseTitle').textContent=info.reference;
+  byId('caseMeta').textContent=`${info.purpose} · ${info.actor} (${info.role}) · ${info.record_count} records · Case ID ${info.id}`;
+  byId('importPanel').classList.toggle('hidden', info.role === 'viewer');
+  byId('accessPanel').classList.toggle('hidden', info.role !== 'owner');
+  const list=byId('members'); list.replaceChildren();
+  for (const member of info.members || []) {
+    const row=document.createElement('div'); row.textContent=`${member.actor} · ${member.role} · ${member.active ? 'active' : 'revoked'} `;
+    if (member.active && member.role !== 'owner') {
+      const button=document.createElement('button'); button.className='secondary'; button.textContent='Revoke';
+      button.onclick=() => run(button, async () => {await api('revoke', {case_id:session.case_id, member_id:member.id}); await refresh(); status('Member access revoked.');}); row.append(button);
+    }
+    list.append(row);
+  }
+}
+async function run(button, work) { button.disabled=true; status('Working…'); try {await work();} catch (error) {status(error.message,true);} finally {button.disabled=false;} }
+byId('createForm').onsubmit=event => {event.preventDefault(); const form=event.currentTarget; run(form.querySelector('button'), async () => {const data=await api('create',fields(form),null); saveSession({case_id:data.case_id, access_key:data.access_key}); issued(data); await refresh(); status('Case created. Save the owner key before leaving this page.');});};
+byId('openForm').onsubmit=event => {event.preventDefault(); const form=event.currentTarget; run(form.querySelector('button'), async () => {const data=fields(form); await api('overview',{case_id:data.case_id},data.access_key); saveSession(data); form.reset(); await refresh(); status('Case opened.');});};
+byId('hideKey').onclick=() => {byId('issuedKey').textContent=''; byId('issued').classList.add('hidden');};
+byId('lock').onclick=() => {saveSession(null); auditData=null; byId('workspace').classList.add('hidden'); byId('entry').classList.remove('hidden'); byId('issuedKey').textContent=''; byId('issued').classList.add('hidden'); byId('matches').replaceChildren(); byId('audit').textContent=''; byId('members').replaceChildren(); byId('searchSummary').textContent=''; byId('importSummary').textContent=''; byId('downloadAudit').disabled=true; ['searchForm','importForm','grantForm','createForm'].forEach(id => byId(id).reset()); status('Case locked. Reopen using your saved key.');};
+function matchCard(record) {
+  const card=document.createElement('article'); card.className='card'; const title=document.createElement('h3'); title.textContent=record.name || 'Unnamed source record'; card.append(title);
+  const badge=document.createElement('span'); badge.className='badge'; badge.textContent=record.match_basis.replaceAll('_',' '); card.append(badge);
+  const state=document.createElement('span'); state.className='badge'; state.textContent='Identity unverified'; card.append(state);
+  const dl=document.createElement('dl');
+  const pairs=[['Entity',record.entity_type],['Phones',(record.phones || []).join(', ') || 'Not recorded'],['Emails',(record.emails || []).join(', ') || 'Not recorded'],['Payment identifiers',(record.payment_identifiers || []).join(', ') || 'Not recorded'],['Source',record.provenance.source_reference],['Source type',record.provenance.source_type],['Observed at',record.provenance.observed_at],['Collected by',record.provenance.collected_by],['Authorization',record.provenance.authorization_reference],['Access basis',record.provenance.access_basis],['Imported at',record.provenance.imported_at],['Notes',record.notes || 'None']];
+  for (const [label,value] of pairs) { const dt=document.createElement('dt'); dt.textContent=label; const dd=document.createElement('dd'); dd.textContent=value; dl.append(dt,dd); }
+  card.append(dl);
+  if (record.provenance.source_type === 'public_business') {const link=document.createElement('a'); link.href=record.provenance.source_reference; link.target='_blank'; link.rel='noopener noreferrer'; link.textContent='Open cited business source ↗'; card.append(link);}
+  const details=document.createElement('details'); const summary=document.createElement('summary'); summary.textContent='Record and evidence hash'; const pre=document.createElement('pre'); pre.textContent=JSON.stringify({record_id:record.record_id,import_sha256:record.provenance.import_sha256},null,2); details.append(summary,pre); card.append(details); return card;
+}
+byId('searchForm').onsubmit=event => {event.preventDefault(); const form=event.currentTarget; run(form.querySelector('button'), async () => {const data=await api('search',{case_id:session.case_id,...fields(form)}); byId('matches').replaceChildren(...data.matches.map(matchCard)); byId('searchSummary').textContent=`${data.matches.length} possible matches${data.truncated ? ' (first 100 shown; narrow your search)' : ''}. ${data.searched_scope}.`; status(data.matches.length ? 'Search complete. Review provenance before linking identities.' : 'No matches in this case. Import authorized records or try a different name/number.');});};
+function parseCSV(text) {
+  const rows=[]; let row=[], field='', quoted=false, afterQuote=false;
+  text=text.replace(/^\uFEFF/,'');
+  for (let i=0;i<text.length;i++) {
+    const char=text[i];
+    if (quoted) {if (char==='"') {if(text[i+1]==='"'){field+='"';i++;}else{quoted=false;afterQuote=true;}}else{field+=char;} continue;}
+    if(char==='"') {if(field || afterQuote) throw new Error('Malformed CSV quote.'); quoted=true;}
+    else if(char===',') {row.push(field);field='';afterQuote=false;}
+    else if(char==='\n' || char==='\r') {row.push(field);if(row.some(value=>value.trim())) rows.push(row);row=[];field='';afterQuote=false;if(char==='\r' && text[i+1]==='\n') i++;}
+    else {if(afterQuote) throw new Error('Unexpected text after CSV quote.');field+=char;}
+  }
+  if(quoted) throw new Error('CSV has an unclosed quoted field.');
+  row.push(field);if(row.some(value=>value.trim())) rows.push(row);
+  const headers=(rows.shift() || []).map(value=>value.trim());
+  const allowed=['name','entity_type','phones','emails','payment_identifiers','notes'];
+  if (!headers.length || new Set(headers).size !== headers.length || headers.some(value=>!allowed.includes(value))) throw new Error('Use the CSV template column names.');
+  return rows.map((values,index) => {if(values.length!==headers.length) throw new Error(`CSV row ${index+2} has the wrong number of columns.`); const record=Object.fromEntries(headers.map((name,i)=>[name,values[i].trim()])); for(const name of ['phones','emails','payment_identifiers']) record[name]=(record[name] || '').split(';').map(value=>value.trim()).filter(Boolean); if(!record.entity_type) delete record.entity_type; return record;});
+}
+byId('importForm').onsubmit=event => {event.preventDefault();const form=event.currentTarget;run(form.querySelector('button'),async () => {
+  const file=byId('importFile').files[0]; if(!file || file.size>4*1024*1024) throw new Error('Choose a CSV or JSON file no larger than 4 MB.');
+  const text=await file.text(); const records=file.name.toLowerCase().endsWith('.csv') ? parseCSV(text) : JSON.parse(text);
+  if(!Array.isArray(records) || !records.length || records.length>1000) throw new Error('The file must contain an array or CSV with 1–1,000 records.');
+  const input=fields(form); const source={source_type:input.source_type,source_reference:input.source_reference,observed_at:new Date(input.observed_at).toISOString(),authorization_reference:input.authorization_reference,access_basis:input.access_basis,authorized:form.elements.authorized.checked};
+  const result=await api('import',{case_id:session.case_id,source,records});
+  byId('importSummary').textContent=`${result.imported} records imported; ${result.duplicates_skipped} duplicates skipped. Import SHA-256: ${result.import_sha256}`;
+  byId('importFile').value=''; await refresh(); status('Evidence import saved with provenance.');
+});};
+byId('template').onclick=() => download('geotrace-osint-template.csv','name,entity_type,phones,emails,payment_identifiers,notes\n','text/csv');
+byId('grantForm').onsubmit=event => {event.preventDefault();const form=event.currentTarget;run(form.querySelector('button'),async () => {const data=await api('grant',{case_id:session.case_id,...fields(form)}); issued(data);form.reset();await refresh();status('Member key issued. Save it securely; it is shown only now.');});};
+byId('loadAudit').onclick=event => run(event.currentTarget,async () => {auditData=await api('audit',{case_id:session.case_id});byId('audit').textContent=JSON.stringify(auditData,null,2);byId('downloadAudit').disabled=false;status(auditData.chain_valid ? 'Audit hash chain verified.' : 'Audit chain mismatch detected.',!auditData.chain_valid);});
+byId('downloadAudit').onclick=() => {if(auditData) download('geotrace-case-audit.json',JSON.stringify(auditData,null,2),'application/json');};
+</script></body></html>

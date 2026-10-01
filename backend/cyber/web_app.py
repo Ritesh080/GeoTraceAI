@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import json
 import tempfile
 from email.parser import BytesParser
@@ -15,12 +16,15 @@ from urllib.parse import urlparse
 from main import analyze_image, analyze_text_evidence
 from evidence_assessment_service import assess_social_evidence
 from social_collection_service import PublicCollectionError, collect_public_media
+from case_osint_service import CaseStore, CaseError
 
 
 HOST = "127.0.0.1"
 DEFAULT_PORT = 8787
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 WEB_ROOT = Path(__file__).with_name("web")
+CASE_STORE = CaseStore()
+MAX_CASE_REQUEST_BYTES = 4 * 1024 * 1024
 
 
 def _parse_multipart(content_type: str, body: bytes) -> tuple[dict[str, list[str]], dict]:
@@ -138,9 +142,9 @@ class GeoTraceHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(encoded)
 
-    def _send_index(self) -> None:
+    def _send_index(self, filename: str = "index.html") -> None:
         try:
-            encoded = (WEB_ROOT / "index.html").read_bytes()
+            encoded = (WEB_ROOT / filename).read_bytes()
         except OSError as exc:
             self._send_json(
                 HTTPStatus.INTERNAL_SERVER_ERROR,
@@ -161,6 +165,8 @@ class GeoTraceHandler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/":
             self._send_index()
+        elif path == "/osint":
+            self._send_index("osint.html")
         elif path == "/api/health":
             self._send_json(
                 HTTPStatus.OK,
@@ -173,6 +179,7 @@ class GeoTraceHandler(BaseHTTPRequestHandler):
                         "on_device_ocr",
                         "social_evidence",
                         "automatic_public_collection",
+                        "authorized_case_osint",
                     ],
                 },
             )
@@ -180,6 +187,9 @@ class GeoTraceHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.NOT_FOUND, {"status": "not_found"})
 
     def do_POST(self) -> None:
+        if urlparse(self.path).path.startswith("/api/osint/"):
+            self._handle_case_osint()
+            return
         if urlparse(self.path).path != "/api/analyze":
             self._send_json(HTTPStatus.NOT_FOUND, {"status": "not_found"})
             return
@@ -292,6 +302,44 @@ class GeoTraceHandler(BaseHTTPRequestHandler):
 
     def log_message(self, format_string: str, *args) -> None:
         print(f"[{self.log_date_time_string()}] {format_string % args}")
+
+    def _handle_case_osint(self) -> None:
+        try:
+            # This workspace is deliberately available only through localhost.
+            # Reject foreign browser origins and Host headers before creating a case.
+            server_host, port = self.server.server_address[:2]
+            if not ipaddress.ip_address(server_host).is_loopback:
+                raise CaseError("OSINT case workspace requires a loopback server binding", 403)
+            allowed_hosts = {f"127.0.0.1:{port}", f"localhost:{port}", f"[::1]:{port}"}
+            host = self.headers.get("Host", "")
+            if host not in allowed_hosts:
+                raise CaseError("Local case workspace Host required", 403)
+            origin = self.headers.get("Origin")
+            if origin is not None and origin != f"http://{host}":
+                raise CaseError("Same-origin case requests required", 403)
+            if self.headers.get("Sec-Fetch-Site") == "cross-site":
+                raise CaseError("Cross-site case requests are not allowed", 403)
+            if self.headers.get("Content-Type", "").split(";", 1)[0] != "application/json":
+                raise CaseError("Case API expects application/json", 415)
+            try:
+                size = int(self.headers.get("Content-Length", "0"))
+            except ValueError as exc:
+                raise CaseError("Invalid content length") from exc
+            if size <= 0 or size > MAX_CASE_REQUEST_BYTES:
+                raise CaseError("Case request must be present and no larger than 4 MB", 413)
+            try:
+                payload = json.loads(self.rfile.read(size).decode("utf-8"))
+            except (ValueError, UnicodeError) as exc:
+                raise CaseError("Invalid JSON request") from exc
+            authorization = self.headers.get("Authorization", "")
+            key = authorization[7:] if authorization.startswith("Bearer ") else ""
+            action = urlparse(self.path).path.removeprefix("/api/osint/")
+            result = CASE_STORE.dispatch(action, payload, key)
+            self._send_json(HTTPStatus.OK, result)
+        except CaseError as exc:
+            self._send_json(HTTPStatus(exc.status), {"status": "error", "reason": str(exc)})
+        except Exception:
+            self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"status": "error", "reason": "Case workspace operation failed"})
 
 
 def run_server(host: str = HOST, port: int = DEFAULT_PORT) -> None:

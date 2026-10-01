@@ -58,3 +58,6 @@ datasets/geonames/*.sqlite3
 Geo Trace/.obsidian/
 Geo Trace/tmp/
 Geo Trace/zorven-theloser-homepage/
+
+# Private investigator case records and local access state
+data/osint/
